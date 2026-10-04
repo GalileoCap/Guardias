@@ -1,10 +1,11 @@
 import esLocale from '@fullcalendar/core/locales/es'
-import type { DatesSetArg, EventContentArg, EventInput } from '@fullcalendar/core'
+import type { DatesSetArg, DayCellContentArg, EventClickArg, EventContentArg, EventInput } from '@fullcalendar/core'
+import type { DateClickArg } from '@fullcalendar/interaction'
 import dayGridPlugin from '@fullcalendar/daygrid'
 import interactionPlugin from '@fullcalendar/interaction'
 import FullCalendar from '@fullcalendar/react'
-import { addDays, format, startOfWeek } from 'date-fns'
-import { useMemo, useRef, useState } from 'react'
+import { useCallback, useMemo, useRef, useState } from 'react'
+import { addDaysTo, isoOf, mondayOf } from '../dates'
 import { hasIssue, rankCandidates, suggestAssignments } from '../fairness'
 import { contrastText, useHolidayLookup, useProblems, useQuirofano } from '../hooks'
 import { useStore } from '../store'
@@ -15,7 +16,8 @@ import WeekGutter from './WeekGutter'
 
 type Mode = 'assign' | 'mark'
 
-const iso = (d: Date) => format(d, 'yyyy-MM-dd')
+const iso = isoOf
+const escapeHtml = (s: string) => s.replace(/[&<>"']/g, (c) => `&#${c.charCodeAt(0)};`)
 
 // Constantes fuera del componente: si cambian de identidad, FullCalendar re-renderiza todo.
 const PLUGINS = [dayGridPlugin, interactionPlugin]
@@ -134,6 +136,8 @@ export default function CalendarView({
     return [...real, ...ghosts]
   }, [shifts, suggestions, peopleById, highlightId, problems, showProblems, unavoidable])
 
+  // FullCalendar vuelve a dibujar todo si alguna de sus funciones cambia de identidad: las que dependen del estado
+  // llaman a la versión más reciente por una ref, y las demás se memorizan.
   const handleDay = (date: string) => {
     if (mode === 'mark') {
       if (date in shifts) removeShift(date)
@@ -142,19 +146,38 @@ export default function CalendarView({
       setOpenDate(date)
     }
   }
+  const handleDayRef = useRef(handleDay)
+  handleDayRef.current = handleDay
+  const onDateClick = useCallback((arg: DateClickArg) => handleDayRef.current(arg.dateStr), [])
+  const onEventClick = useCallback((arg: EventClickArg) => handleDayRef.current(arg.event.extendedProps.date ?? arg.event.id), [])
 
-  const onDatesSet = (arg: DatesSetArg) => {
+  const onDatesSet = useCallback((arg: DatesSetArg) => {
     const weeks: string[] = []
-    for (let w = startOfWeek(arg.view.activeStart, { weekStartsOn: 1 }); w < arg.view.activeEnd; w = addDays(w, 7)) {
-      weeks.push(iso(w))
-    }
+    const end = iso(arg.view.activeEnd)
+    for (let w = mondayOf(iso(arg.view.activeStart)); w < end; w = addDaysTo(w, 7)) weeks.push(w)
     const next = {
       start: iso(arg.view.currentStart),
       end: iso(arg.view.currentEnd),
       weeks,
     }
     setRange((prev) => (prev && prev.start === next.start && prev.end === next.end ? prev : next))
-  }
+  }, [])
+
+  const dayCellClassNames = useCallback((arg: DayCellContentArg) => (holiday(iso(arg.date)) ? ['fc-holiday'] : []), [holiday])
+  // Como HTML y no como elemento de React: así FullCalendar no arma un portal por cada celda en cada cambio
+  const dayCellContent = useCallback(
+    (arg: DayCellContentArg) => {
+      const name = holiday(iso(arg.date))
+      return {
+        html:
+          '<div class="flex flex-col items-end">' +
+          `<span>${escapeHtml(arg.dayNumberText)}</span>` +
+          (name ? `<span class="hidden max-w-24 truncate text-[10px] text-error sm:block" title="${escapeHtml(name)}">${escapeHtml(name)}</span>` : '') +
+          '</div>',
+      }
+    },
+    [holiday],
+  )
 
   return (
     <div className="flex flex-col gap-3">
@@ -255,20 +278,10 @@ export default function CalendarView({
             events={events}
             eventContent={renderEvent}
             datesSet={onDatesSet}
-            dateClick={(arg) => handleDay(arg.dateStr)}
-            eventClick={(arg) => handleDay(arg.event.extendedProps.date ?? arg.event.id)}
-            dayCellClassNames={(arg) => (holiday(iso(arg.date)) ? ['fc-holiday'] : [])}
-            dayCellContent={(arg) => {
-              const name = holiday(iso(arg.date))
-              return (
-                <div className="flex flex-col items-end">
-                  <span>{arg.dayNumberText}</span>
-                  {name && (
-                    <span className="hidden max-w-24 truncate text-[10px] text-error sm:block" title={name}>{name}</span>
-                  )}
-                </div>
-              )
-            }}
+            dateClick={onDateClick}
+            eventClick={onEventClick}
+            dayCellClassNames={dayCellClassNames}
+            dayCellContent={dayCellContent}
           />
         </div>
       </div>

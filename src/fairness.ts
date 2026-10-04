@@ -1,4 +1,4 @@
-import { addDays, differenceInCalendarDays, format, parseISO, startOfWeek } from 'date-fns'
+import { addDaysTo, dayOfWeek, daysBetween, mondayOf, toDay } from './dates'
 import type { HolidayLookup } from './holidays'
 import type { Person, Quirofano, Settings, Shifts } from './types'
 
@@ -58,10 +58,13 @@ export const CATEGORIES: {
 ]
 
 /** Lunes de la semana de `date` ('YYYY-MM-DD'), que es la clave de `quirofano` y de cada finde. */
-export const weekOf = (date: string) => format(startOfWeek(parseISO(date), { weekStartsOn: 1 }), 'yyyy-MM-dd')
+export const weekOf = mondayOf
 
-const shiftWeek = (week: string, days: number) => format(addDays(parseISO(week), days), 'yyyy-MM-dd')
-const isWeekendDay = (date: string) => [0, 6].includes(parseISO(date).getDay())
+const shiftWeek = addDaysTo
+const isWeekendDay = (date: string) => {
+  const day = dayOfWeek(date)
+  return day === 0 || day === 6
+}
 
 /**
  * `busyWeekends` es el dato base de freeWeekends y de las sugerencias; `quirofano` se registra
@@ -94,7 +97,7 @@ const emptyCounts = (): Counts => ({
 /** Categorías a las que suma una guardia en esa fecha (siempre incluye 'total'). */
 export function categoriesOf(date: string, holiday: HolidayLookup): ShiftCategory[] {
   const cats: ShiftCategory[] = ['total']
-  const day = parseISO(date).getDay()
+  const day = dayOfWeek(date)
   if (day === 6) cats.push('saturday')
   if (day === 0) cats.push('sunday')
   if (holiday(date)) cats.push('holiday')
@@ -112,8 +115,22 @@ const QUIROFANO_AVOID_OFFSETS = [0, 1, 2, 3, 5, 6]
 const busyOn = (shifts: Shifts, week: string, personId: string) =>
   shifts[shiftWeek(week, 5)] === personId || shifts[shiftWeek(week, 6)] === personId
 
+/**
+ * Recuerda el último resultado de `fn` mientras los argumentos sean los mismos (por identidad). La tabla de balance,
+ * los avisos del calendario y `shiftProblems` piden lo mismo con el mismo estado: así lo calculan una sola vez.
+ */
+function memoLast<A extends unknown[], R>(fn: (...args: A) => R): (...args: A) => R {
+  let last: { args: A; value: R } | undefined
+  return (...args) => {
+    if (last && last.args.every((a, i) => Object.is(a, args[i]))) return last.value
+    const value = fn(...args)
+    last = { args, value }
+    return value
+  }
+}
+
 /** Contadores por persona (solo gente activa, dentro de la ventana de conteo). */
-export function computeCounts(
+function countShifts(
   people: Person[],
   shifts: Shifts,
   quirofano: Quirofano,
@@ -146,7 +163,7 @@ export function computeCounts(
   for (const [id, own] of Object.entries(dates)) {
     own.sort()
     for (let i = 1; i < own.length; i++) {
-      const gap = differenceInCalendarDays(parseISO(own[i]), parseISO(own[i - 1]))
+      const gap = daysBetween(own[i], own[i - 1])
       if (gap === 2) counts[id].sandwich++
       counts[id].minGap = counts[id].minGap === null ? gap : Math.min(counts[id].minGap, gap)
     }
@@ -156,7 +173,7 @@ export function computeCounts(
   const longCandidates = new Set<string>()
   for (const date of Object.keys(shifts)) {
     if (!inWindow(date, settings)) continue
-    const day = parseISO(date).getDay()
+    const day = dayOfWeek(date)
     if (day === 5 || day === 6 || day === 0) longCandidates.add(weekOf(date))
     else if (day === 1) longCandidates.add(shiftWeek(weekOf(date), -7))
   }
@@ -194,6 +211,9 @@ export function computeCounts(
   }
   return counts
 }
+
+/** Igual que `countShifts`, pero compartiendo el resultado entre quienes piden lo mismo (ver `memoLast`). `rankCandidates` y similares usan la versión sin memoria: cada llamada lleva datos distintos. */
+export const computeCounts = memoLast(countShifts)
 
 /**
  * Qué tan parejo está el reparto (0..1) frente al mejor reparto posible con números enteros.
@@ -299,7 +319,7 @@ export function shiftProblems(
     const list = (problems[date] ??= [])
     if (!list.includes(text)) list.push(text)
   }
-  const dm = (date: string) => format(parseISO(date), 'd/M')
+  const dm = (date: string) => `${+date.slice(8, 10)}/${+date.slice(5, 7)}`
   const labelOf = (key: Category) => CATEGORIES.find((c) => c.key === key)!.label
 
   const own: Record<string, string[]> = {}
@@ -318,7 +338,7 @@ export function shiftProblems(
   for (const dates of Object.values(own)) {
     dates.sort()
     for (let i = 1; i < dates.length; i++) {
-      if (differenceInCalendarDays(parseISO(dates[i]), parseISO(dates[i - 1])) === 2) {
+      if (daysBetween(dates[i], dates[i - 1]) === 2) {
         add(dates[i - 1], `Sanguchito con la guardia del ${dm(dates[i])}`)
         add(dates[i], `Sanguchito con la guardia del ${dm(dates[i - 1])}`)
       }
@@ -370,12 +390,12 @@ const SPACING_BONUS_DAYS = 14
 
 /** Días hasta la guardia anterior y la siguiente de `personId` respecto de `date`. */
 function gapsAround(date: string, shifts: Shifts, personId: string) {
-  const t = parseISO(date)
+  const t = toDay(date)
   let before: number | null = null
   let after: number | null = null
   for (const [d, p] of Object.entries(shifts)) {
     if (p !== personId || d === date) continue
-    const diff = differenceInCalendarDays(parseISO(d), t)
+    const diff = toDay(d) - t
     if (diff < 0 && (before === null || -diff < before)) before = -diff
     if (diff > 0 && (after === null || diff < after)) after = diff
   }
@@ -411,7 +431,7 @@ export function rankCandidates(
 ): Candidate[] {
   const withoutDate = { ...shifts }
   delete withoutDate[date]
-  const counts = computeCounts(people, withoutDate, quirofano, settings, holiday)
+  const counts = countShifts(people, withoutDate, quirofano, settings, holiday)
   const cats = categoriesOf(date, holiday)
   const week = weekOf(date)
   return people
@@ -437,7 +457,7 @@ export function rankCandidates(
       const backToBack = before === 1 || after === 1
 
       // Alrededor del quirófano (la semana empieza el lunes y el domingo cierra la anterior)
-      const day = parseISO(date).getDay()
+      const day = dayOfWeek(date)
       let around: Candidate['around'] = null
       let aroundCost = 0
       if (quirofano[week] === person.id) {
@@ -529,12 +549,12 @@ export function expectedQuirofanero(week: string, quirofano: Quirofano, order: s
   for (const [w, id] of Object.entries(quirofano)) {
     const index = order.indexOf(id)
     if (index < 0 || w === week) continue
-    const weeks = Math.round(differenceInCalendarDays(parseISO(week), parseISO(w)) / 7)
+    const weeks = Math.round(daysBetween(week, w) / 7)
     const closer = !anchor || Math.abs(weeks) < Math.abs(anchor.weeks) || (Math.abs(weeks) === Math.abs(anchor.weeks) && weeks > anchor.weeks)
     if (closer) anchor = { weeks, index }
   }
   if (!anchor) {
-    const sinceEpoch = Math.round(differenceInCalendarDays(parseISO(week), parseISO(ROTATION_EPOCH)) / 7)
+    const sinceEpoch = Math.round(daysBetween(week, ROTATION_EPOCH) / 7)
     return order[((sinceEpoch % n) + n) % n]
   }
   return order[(((anchor.index + anchor.weeks) % n) + n) % n]
@@ -553,17 +573,17 @@ export function rankQuirofano(
 ): QuirofanoCandidate[] {
   const without = { ...quirofano }
   delete without[week]
-  const counts = computeCounts(people, {}, without, settings, holiday)
+  const counts = countShifts(people, {}, without, settings, holiday)
   const expectedId = expectedQuirofanero(week, without, rotationOrder(people, settings))
-  const at = (offset: number) => without[format(addDays(parseISO(week), offset), 'yyyy-MM-dd')]
-  const t = parseISO(week).getTime()
+  const at = (offset: number) => without[addDaysTo(week, offset)]
+  const t = toDay(week)
   return people
     .filter((p) => p.active)
     .map((person) => {
       const adjacent = { before: at(-7) === person.id, after: at(7) === person.id }
       let sinceLast = Infinity
       for (const [w, id] of Object.entries(without)) {
-        if (id === person.id) sinceLast = Math.min(sinceLast, Math.abs(parseISO(w).getTime() - t) / 864e5)
+        if (id === person.id) sinceLast = Math.min(sinceLast, Math.abs(toDay(w) - t))
       }
       const count = counts[person.id].quirofano
       const expected = person.id === expectedId
@@ -597,7 +617,7 @@ export function suggestQuirofano(
  * El quirófano de cada semana: lo cargado a mano más, en las semanas sin asignar, lo que corresponde por el
  * orden de rotación. Cubre desde la primera semana con guardias (o de `extraWeeks`) hasta una después de la última.
  */
-export function effectiveQuirofano(
+export const effectiveQuirofano = memoLast(function effectiveQuirofano(
   people: Person[],
   shifts: Shifts,
   quirofano: Quirofano,
@@ -610,4 +630,4 @@ export function effectiveQuirofano(
   const missing: string[] = []
   for (let w = weeks[0]; w <= last; w = shiftWeek(w, 7)) if (!(w in quirofano)) missing.push(w)
   return { ...suggestQuirofano(missing, people, quirofano, settings), ...quirofano }
-}
+})

@@ -8,7 +8,8 @@
     "dev:server": "node --disable-warning=ExperimentalWarning scripts/build-server.mjs && PORT=3002 DATA_DIR=.data node --watch --watch-path=server --watch-path=src/data.ts server/index.mjs",
     "build": "tsc --noEmit && vite build && node scripts/precompress.mjs && node --disable-warning=ExperimentalWarning scripts/build-server.mjs",
     "start": "node server/index.mjs",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "holidays": "node scripts/build-holidays.mjs"
   },
   "dependencies": {
     "@fullcalendar/core": "^6.1.21",
@@ -16,7 +17,6 @@
     "@fullcalendar/interaction": "^6.1.21",
     "@fullcalendar/react": "6.1.21",
     "date-fns": "^4.4.0",
-    "date-holidays": "^3.37.0",
     "react": "^19.3.0",
     "react-dom": "^19.3.0",
     "zustand": "^5.0.15"
@@ -27,6 +27,7 @@
     "@types/react-dom": "^19.3.0",
     "@vitejs/plugin-react": "^6.1.1",
     "daisyui": "^5.7.47",
+    "date-holidays": "^3.37.0",
     "tailwindcss": "^4.3.3",
     "typescript": "^7.0.2",
     "vite": "^8.3.2"

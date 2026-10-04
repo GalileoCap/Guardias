@@ -54,10 +54,13 @@ export default function WeekGutter({
       cancelAnimationFrame(frame)
       frame = requestAnimationFrame(measure)
     }
+    // Se mira solo el calendario (`.cal-body`): observar toda la tarjeta incluía a esta misma columna, y cada cambio
+    // de ella disparaba otra medición (con el layout forzado) sin que nada hubiera cambiado de lugar.
+    const body = root.querySelector('.cal-body') ?? root
     const resize = new ResizeObserver(schedule)
     const mutation = new MutationObserver(schedule)
     resize.observe(root)
-    mutation.observe(root, { childList: true, subtree: true })
+    mutation.observe(body, { childList: true, subtree: true })
     schedule()
     return () => {
       cancelAnimationFrame(frame)
