@@ -120,7 +120,7 @@ body {
 }
 
 /* Medidas del calendario que cambian con el ancho; las usa también la columna de quirófano (WeekGutter) */
-.cal-card { --pad: 0.375rem; --chip: 22px; --gutter: 28px; padding: var(--pad); }
+.cal-card { --pad: 0.375rem; --chip: 10px; --gutter: 18px; padding: var(--pad); }
 .cal-gutter { left: var(--pad); width: var(--chip); }
 .cal-body { margin-left: var(--gutter); }
 @media (min-width: 640px) {
@@ -140,7 +140,7 @@ body {
   .fc .fc-daygrid-day-number { font-size: 0.78rem; padding: 2px 4px; }
   .fc .fc-day-today .fc-daygrid-day-number { margin: 2px; padding: 0 5px; }
   .fc .fc-event { font-size: 0.66rem; padding: 1px 2px; text-align: center; }
-  .fc .fc-daygrid-event { margin-inline: 1px; }
+  .fc .fc-daygrid-event { margin-inline: 2px; }
 }
 
 /* Etiquetas de quirófano (columna izquierda) */
@@ -157,7 +157,7 @@ body {
 /* Guardia que empeora la justicia */
 .fc .fc-event.problem {
   outline: 2px solid var(--color-error);
-  outline-offset: 1px;
+  outline-offset: 0; /* el borde sobresale 2px: no puede pasar del margen de la píldora o la celda lo recorta */
 }
 
 /* Aviso discreto: hay problema, pero no existe una opción mejor */

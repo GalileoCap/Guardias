@@ -70,7 +70,7 @@ export default function WeekGutter({
     <div className="cal-gutter pointer-events-none absolute top-0">
       {layout.headerTop !== null && (
         <div
-          className="absolute w-full text-center text-[10px] font-semibold uppercase text-base-content/60"
+          className="absolute hidden w-full text-center text-[10px] font-semibold uppercase text-base-content/60 sm:block"
           style={{ top: layout.headerTop + 8 }}
           title="Quirófano"
         >
@@ -83,7 +83,7 @@ export default function WeekGutter({
         return (
           <button
             key={`${week}-${i}`}
-            className={`q-vertical pointer-events-auto absolute w-full truncate rounded text-center text-[11px] sm:text-xs ${
+            className={`q-vertical pointer-events-auto absolute w-full rounded sm:truncate text-center text-[11px] before:absolute before:-left-1 before:-right-1 before:top-0 before:bottom-0 before:content-[''] sm:text-xs sm:before:hidden ${
               person ? 'q-chip font-medium' : 'border border-dashed border-base-content/60 italic opacity-60'
             } ${dimmed ? 'opacity-20' : ''}`}
             style={{
@@ -91,6 +91,7 @@ export default function WeekGutter({
               height: height - 4,
               ...(person && { background: person.color, borderColor: person.color, color: contrastText(person.color) }),
             }}
+            aria-label={person ? `Quirófano: ${person.name}` : 'Quirófano: sin asignar'}
             title={
               person
                 ? `Quirófano: ${person.name}${week in manual ? '' : ' (automático según el orden)'}`
@@ -98,7 +99,7 @@ export default function WeekGutter({
             }
             onClick={() => onOpen(week)}
           >
-            {person ? person.name : 'sin asignar'}
+            <span className="hidden sm:inline">{person ? person.name : 'sin asignar'}</span>
           </button>
         )
       })}

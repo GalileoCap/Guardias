@@ -30,7 +30,13 @@ const renderEvent = (arg: EventContentArg) => {
   // Aviso fuerte: ícono de advertencia pleno. Si no había mejor opción: el mismo ícono pero tenue, además del borde punteado
   return (
     <span title={tooltip} className="block truncate">
-      {problems?.length ? <Icon name="warning" className={`mr-1 hidden size-3 -translate-y-px sm:inline-block ${soft ? 'opacity-50' : ''}`} /> : ''}
+      {problems?.length ? (
+        <span className={`hidden sm:inline ${soft ? 'opacity-50' : ''}`}>
+          <Icon name="warning" className="mr-1 size-3 -translate-y-px" />
+        </span>
+      ) : (
+        ''
+      )}
       {arg.event.title}
     </span>
   )
