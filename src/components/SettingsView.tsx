@@ -21,7 +21,7 @@ export default function SettingsView() {
 function Card({ title, hint, children }: { title: string; hint?: string; children: React.ReactNode }) {
   return (
     <section className="card card-border bg-base-100">
-      <div className="card-body gap-3 p-4">
+      <div className="card-body gap-3 p-3 sm:p-4">
         <div>
           <h2 className="card-title text-base">{title}</h2>
           {hint && <p className="text-sm text-base-content/60">{hint}</p>}
@@ -56,7 +56,7 @@ function PeopleCard() {
               onChange={(e) => updatePerson(p.id, { color: e.target.value })}
             />
             <input
-              className="input input-sm flex-1"
+              className="input input-sm min-w-0 flex-1"
               value={p.name}
               onChange={(e) => updatePerson(p.id, { name: e.target.value })}
             />
@@ -66,8 +66,9 @@ function PeopleCard() {
                 className="toggle toggle-sm toggle-success"
                 checked={p.active}
                 onChange={(e) => updatePerson(p.id, { active: e.target.checked })}
+                aria-label="Activa"
               />
-              Activa
+              <span className="hidden sm:inline">Activa</span>
             </label>
             <button
               className="btn btn-ghost btn-sm btn-square text-error"
@@ -138,11 +139,11 @@ function QuirofanoCard() {
                     {p.name}
                     {!p.active && ' (inactiva: se saltea)'}
                   </span>
-                  <button className="btn btn-ghost btn-xs" disabled={i === 0} title="Subir" onClick={() => move(i, -1)}>
+                  <button className="btn btn-ghost btn-sm sm:btn-xs" disabled={i === 0} title="Subir" onClick={() => move(i, -1)}>
                     ↑
                   </button>
                   <button
-                    className="btn btn-ghost btn-xs"
+                    className="btn btn-ghost btn-sm sm:btn-xs"
                     disabled={i === order.length - 1}
                     title="Bajar"
                     onClick={() => move(i, 1)}
@@ -150,7 +151,7 @@ function QuirofanoCard() {
                     ↓
                   </button>
                   <button
-                    className="btn btn-ghost btn-xs text-error"
+                    className="btn btn-ghost btn-sm sm:btn-xs text-error"
                     title="Sacar de la rotación"
                     onClick={() => setOrder(order.filter((x) => x !== id))}
                   >
@@ -249,9 +250,9 @@ function HolidaysCard() {
             </li>
           ))}
         </ul>
-        <form className="flex gap-2" onSubmit={add}>
+        <form className="flex flex-wrap gap-2" onSubmit={add}>
           <input type="date" className="input input-sm w-40 shrink-0" value={date} onChange={(e) => setDate(e.target.value)} required />
-          <input className="input input-sm min-w-0 flex-1" placeholder="Nombre (opcional)" value={name} onChange={(e) => setName(e.target.value)} />
+          <input className="input input-sm min-w-32 flex-1" placeholder="Nombre (opcional)" value={name} onChange={(e) => setName(e.target.value)} />
           <button className="btn btn-sm" type="submit">Agregar</button>
         </form>
       </div>

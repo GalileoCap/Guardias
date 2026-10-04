@@ -3,8 +3,6 @@ import { weekOf } from '../fairness'
 import { contrastText } from '../hooks'
 import type { Person } from '../types'
 
-export const GUTTER_WIDTH = 38
-
 type Row = { week: string; top: number; height: number }
 type Layout = { rows: Row[]; headerTop: number | null }
 
@@ -69,7 +67,7 @@ export default function WeekGutter({
   }, [containerRef, measure])
 
   return (
-    <div className="pointer-events-none absolute left-3 top-0" style={{ width: GUTTER_WIDTH - 12 }}>
+    <div className="cal-gutter pointer-events-none absolute top-0">
       {layout.headerTop !== null && (
         <div
           className="absolute w-full text-center text-[10px] font-semibold uppercase text-base-content/60"
@@ -85,7 +83,7 @@ export default function WeekGutter({
         return (
           <button
             key={`${week}-${i}`}
-            className={`q-vertical pointer-events-auto absolute w-full truncate rounded text-center text-xs ${
+            className={`q-vertical pointer-events-auto absolute w-full truncate rounded text-center text-[11px] sm:text-xs ${
               person ? 'q-chip font-medium' : 'border border-dashed border-base-content/60 italic opacity-60'
             } ${dimmed ? 'opacity-20' : ''}`}
             style={{

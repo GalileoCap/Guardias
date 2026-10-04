@@ -26,7 +26,7 @@ export default function QuirofanoDialog({ week, onClose }: { week: string; onClo
   }
 
   return (
-    <dialog className="modal modal-open" onClick={(e) => e.target === e.currentTarget && onClose()}>
+    <dialog className="modal modal-open modal-bottom sm:modal-middle" onClick={(e) => e.target === e.currentTarget && onClose()}>
       <div className="modal-box max-w-md">
         <h3 className="text-lg font-bold">Quirófano</h3>
         <p className="text-sm text-base-content/70">
@@ -75,7 +75,7 @@ export default function QuirofanoDialog({ week, onClose }: { week: string; onClo
         </ul>
         <p className="mt-1 text-xs text-base-content/50">Los números no cuentan esta semana.</p>
 
-        <div className="modal-action justify-between">
+        <div className="modal-action flex-wrap justify-between gap-2">
           {manual ? (
             <button className="btn btn-sm btn-error btn-soft" onClick={() => assign(null)}>
               Volver al orden automático

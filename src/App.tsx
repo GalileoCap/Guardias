@@ -6,24 +6,29 @@ import SyncBadge from './components/SyncBadge'
 
 type Tab = 'plan' | 'config'
 
+const TABS: { key: Tab; label: string; icon: string }[] = [
+  { key: 'plan', label: 'Calendario', icon: '📅' },
+  { key: 'config', label: 'Configuración', icon: '⚙️' },
+]
+
 export default function App() {
   const [tab, setTab] = useState<Tab>('plan')
   const [highlightId, setHighlightId] = useState<string | null>(null)
   return (
-    <div className="mx-auto flex max-w-7xl flex-col gap-4 p-4">
-      <header className="flex flex-wrap items-center justify-between gap-2">
-        <h1 className="font-display flex items-center gap-2 text-3xl font-semibold italic text-primary">
-          <img src={`${import.meta.env.BASE_URL}favicon.svg`} alt="" className="size-9" />
+    <div className="mx-auto flex max-w-7xl flex-col gap-3 p-2 pb-24 sm:gap-4 sm:p-4 sm:pb-4">
+      <header className="flex items-center justify-between gap-2">
+        <h1 className="font-display flex items-center gap-2 text-2xl font-semibold italic text-primary sm:text-3xl">
+          <img src={`${import.meta.env.BASE_URL}favicon.svg`} alt="" className="size-8 sm:size-9" />
           Guardias
         </h1>
         <SyncBadge />
-        <div role="tablist" className="tabs tabs-box">
-          <button role="tab" className={`tab ${tab === 'plan' ? 'tab-active' : ''}`} onClick={() => setTab('plan')}>
-            Calendario
-          </button>
-          <button role="tab" className={`tab ${tab === 'config' ? 'tab-active' : ''}`} onClick={() => setTab('config')}>
-            Configuración
-          </button>
+        {/* En el teléfono la navegación va abajo (alcance del pulgar); acá arriba solo desde sm */}
+        <div role="tablist" className="tabs tabs-box hidden sm:inline-flex">
+          {TABS.map((t) => (
+            <button key={t.key} role="tab" className={`tab ${tab === t.key ? 'tab-active' : ''}`} onClick={() => setTab(t.key)}>
+              {t.label}
+            </button>
+          ))}
         </div>
       </header>
       {tab === 'plan' ? (
@@ -34,6 +39,23 @@ export default function App() {
       ) : (
         <SettingsView />
       )}
+      <nav className="dock dock-md sm:hidden" role="tablist">
+        {TABS.map((t) => (
+          <button
+            key={t.key}
+            role="tab"
+            className={tab === t.key ? 'dock-active' : ''}
+            aria-selected={tab === t.key}
+            onClick={() => {
+              setTab(t.key)
+              scrollTo({ top: 0 })
+            }}
+          >
+            <span aria-hidden className="text-lg leading-none">{t.icon}</span>
+            <span className="dock-label">{t.label}</span>
+          </button>
+        ))}
+      </nav>
     </div>
   )
 }

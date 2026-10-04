@@ -101,7 +101,7 @@ export default function FairnessBar({
         <table className="table table-sm text-center">
           <thead>
             <tr>
-              <th className="text-left">&nbsp;</th>
+              <th className="sticky left-0 z-10 bg-base-100 text-left">&nbsp;</th>
               {columns.map((c) => (
                 <th key={c.key} title={c.hint} className="font-medium">
                   <div>{c.label}</div>
@@ -115,7 +115,7 @@ export default function FairnessBar({
           <tbody>
             {people.map((p) => (
               <tr key={p.id} className={highlightId === p.id ? 'bg-base-200' : ''}>
-                <td className="text-left whitespace-nowrap">
+                <td className={`sticky left-0 z-10 whitespace-nowrap text-left ${highlightId === p.id ? 'bg-base-200' : 'bg-base-100'}`}>
                   <button
                     className="flex cursor-pointer items-center gap-2 font-medium hover:underline"
                     title={highlightId === p.id ? 'Quitar resaltado' : `Resaltar las asignaciones de ${p.name}`}

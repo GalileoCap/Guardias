@@ -10,7 +10,7 @@ import { contrastText, useHolidayLookup, useProblems, useQuirofano } from '../ho
 import { useStore } from '../store'
 import DayDialog from './DayDialog'
 import QuirofanoDialog from './QuirofanoDialog'
-import WeekGutter, { GUTTER_WIDTH } from './WeekGutter'
+import WeekGutter from './WeekGutter'
 
 type Mode = 'assign' | 'mark'
 
@@ -19,7 +19,7 @@ const iso = (d: Date) => format(d, 'yyyy-MM-dd')
 // Constantes fuera del componente: si cambian de identidad, FullCalendar re-renderiza todo.
 const PLUGINS = [dayGridPlugin, interactionPlugin]
 const LOCALES = [esLocale]
-const HEADER_TOOLBAR = { left: 'prev,next today', center: 'title', right: '' }
+const HEADER_TOOLBAR = { left: 'title', center: '', right: 'today prev,next' }
 const BUTTON_TEXT = { today: 'Hoy' }
 
 // El motivo de cada guardia que perjudica va como tooltip del evento
@@ -28,8 +28,8 @@ const renderEvent = (arg: EventContentArg) => {
   const tooltip = tip ?? (problems && [...problems, ...(soft ? ['(Ninguna otra persona lo haría mejor)'] : [])].join('\n'))
   // Aviso fuerte: ⚠ pleno. Si no había mejor opción: el mismo ícono pero tenue, además del borde punteado
   return (
-    <span title={tooltip}>
-      {problems?.length ? <span className={soft ? 'opacity-50' : ''}>⚠ </span> : ''}
+    <span title={tooltip} className="block truncate">
+      {problems?.length ? <span className={`hidden sm:inline ${soft ? 'opacity-50' : ''}`}>⚠ </span> : ''}
       {arg.event.title}
     </span>
   )
@@ -51,6 +51,8 @@ export default function CalendarView({
   // Quirófano de cada semana: lo cargado a mano + lo que corresponde por el orden de rotación (incluye las semanas a la vista)
   const quirofano = useQuirofano(range?.weeks)
   const [showSuggestions, setShowSuggestions] = useState(true)
+  // Solo en el teléfono: los interruptores quedan plegados para que el calendario aparezca sin scrollear
+  const [showOptions, setShowOptions] = useState(false)
   const [showProblems, setShowProblems] = useState(true)
   const problems = useProblems()
   const cardRef = useRef<HTMLDivElement>(null)
@@ -149,36 +151,45 @@ export default function CalendarView({
 
   return (
     <div className="flex flex-col gap-3">
-      <div className="flex flex-wrap items-center gap-3">
+      <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
         <div className="join">
           <button className={`btn btn-sm join-item ${mode === 'assign' ? 'btn-primary' : ''}`} onClick={() => setMode('assign')}>
             Asignar
           </button>
           <button className={`btn btn-sm join-item ${mode === 'mark' ? 'btn-primary' : ''}`} onClick={() => setMode('mark')}>
-            Marcar días de guardia
+            Marcar días<span className="hidden sm:inline">&nbsp;de guardia</span>
           </button>
         </div>
-        <label className="flex cursor-pointer items-center gap-2 text-sm" title="Marca con ⚠ las guardias que empeoran la justicia; al pasar el mouse se ve por qué">
-          <input
-            type="checkbox"
-            className="toggle toggle-sm toggle-primary"
-            checked={showProblems}
-            onChange={(e) => setShowProblems(e.target.checked)}
-          />
-          Marcar las que perjudican
-        </label>
-        <label className="flex cursor-pointer items-center gap-2 text-sm" title="Muestra en cada guardia sin asignar a quién recomienda el balance">
-          <input
-            type="checkbox"
-            className="toggle toggle-sm toggle-primary"
-            checked={showSuggestions}
-            onChange={(e) => setShowSuggestions(e.target.checked)}
-          />
-          Mostrar recomendaciones
-        </label>
+        <button
+          className={`btn btn-sm btn-ghost ml-auto sm:hidden ${showOptions ? 'btn-active' : ''}`}
+          aria-expanded={showOptions}
+          onClick={() => setShowOptions((v) => !v)}
+        >
+          Opciones {showOptions ? '▴' : '▾'}
+        </button>
+        <div className={`${showOptions ? 'flex' : 'hidden'} w-full flex-col gap-2 sm:flex sm:w-auto sm:flex-row sm:items-center sm:gap-3`}>
+          <label className="flex cursor-pointer items-center gap-2 text-sm" title="Marca con ⚠ las guardias que empeoran la justicia; al pasar el mouse se ve por qué">
+            <input
+              type="checkbox"
+              className="toggle toggle-sm toggle-primary"
+              checked={showProblems}
+              onChange={(e) => setShowProblems(e.target.checked)}
+            />
+            Marcar las que perjudican
+          </label>
+          <label className="flex cursor-pointer items-center gap-2 text-sm" title="Muestra en cada guardia sin asignar a quién recomienda el balance">
+            <input
+              type="checkbox"
+              className="toggle toggle-sm toggle-primary"
+              checked={showSuggestions}
+              onChange={(e) => setShowSuggestions(e.target.checked)}
+            />
+            Mostrar recomendaciones
+          </label>
+        </div>
         {showSuggestions && (
           <button
-            className="btn btn-sm btn-primary ml-auto"
+            className="btn btn-sm btn-primary w-full sm:ml-auto sm:w-auto"
             disabled={applicableCount === 0 || people.every((p) => !p.active)}
             onClick={applySuggestions}
           >
@@ -189,13 +200,20 @@ export default function CalendarView({
 
       {/* Altura mínima fija: así aparecer o desaparecer el botón de resaltado no corre el resto de la página */}
       <div className="flex min-h-8 items-center gap-3">
-        <span className="text-sm text-base-content/60">
-          {mode === 'assign'
-            ? 'Tocá un día para asignarlo, o el quirofanero de la izquierda para cambiarlo. Tocá una persona de abajo para resaltar sus guardias.'
-            : 'Tocá los días para agregar o quitar guardias.'}
+        <span className={`min-w-0 text-sm text-base-content/60 ${highlighted ? 'hidden sm:inline' : ''}`}>
+          {mode === 'assign' ? (
+            <>
+              <span className="sm:hidden">Tocá un día para asignarlo, o el quirofanero de la izquierda.</span>
+              <span className="hidden sm:inline">
+                Tocá un día para asignarlo, o el quirofanero de la izquierda para cambiarlo. Tocá una persona de abajo para resaltar sus guardias.
+              </span>
+            </>
+          ) : (
+            'Tocá los días para agregar o quitar guardias.'
+          )}
         </span>
-        {/* Ancho reservado siempre: si no, el texto de ayuda cambia de largo de línea al aparecer el botón */}
-        <div className="ml-auto flex w-56 shrink-0 justify-end">
+        {/* Ancho reservado siempre desde sm: si no, el texto de ayuda cambia de largo de línea al aparecer el botón */}
+        <div className="ml-auto flex min-w-0 shrink-0 justify-end sm:w-56">
           {highlighted && (
             <button className="btn btn-sm btn-ghost max-w-full gap-2" onClick={() => onHighlight(null)}>
               <span className="inline-block size-3 shrink-0 rounded-full" style={{ background: highlighted.color }} />
@@ -205,7 +223,7 @@ export default function CalendarView({
         </div>
       </div>
 
-      <div ref={cardRef} className="card card-border bg-base-100 relative p-3">
+      <div ref={cardRef} className="cal-card card card-border bg-base-100 relative">
         <WeekGutter
           containerRef={cardRef}
           assigned={quirofano}
@@ -214,7 +232,7 @@ export default function CalendarView({
           highlightId={highlightId}
           onOpen={setOpenWeek}
         />
-        <div style={{ marginLeft: GUTTER_WIDTH }}>
+        <div className="cal-body">
           <FullCalendar
             plugins={PLUGINS}
             locales={LOCALES}
@@ -237,7 +255,7 @@ export default function CalendarView({
                 <div className="flex flex-col items-end">
                   <span>{arg.dayNumberText}</span>
                   {name && (
-                    <span className="max-w-24 truncate text-[10px] text-error" title={name}>{name}</span>
+                    <span className="hidden max-w-24 truncate text-[10px] text-error sm:block" title={name}>{name}</span>
                   )}
                 </div>
               )

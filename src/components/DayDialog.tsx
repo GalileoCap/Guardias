@@ -39,10 +39,10 @@ export default function DayDialog({ date, onClose }: { date: string; onClose: ()
   }
 
   return (
-    <dialog className="modal modal-open" onClick={(e) => e.target === e.currentTarget && onClose()}>
+    <dialog className="modal modal-open modal-bottom sm:modal-middle" onClick={(e) => e.target === e.currentTarget && onClose()}>
       <div className="modal-box max-w-md">
         <h3 className="text-lg font-bold first-letter:uppercase">{format(parseISO(date), "EEEE d 'de' MMMM", { locale: es })}</h3>
-        <div className="mt-1 flex gap-2">
+        <div className="mt-1 flex flex-wrap gap-2">
           {holidayName && <span className="badge badge-error badge-soft">{holidayName}</span>}
           {isWeekend && <span className="badge badge-soft">Fin de semana</span>}
           {!exists && <span className="badge badge-ghost">Sin guardia cargada</span>}
@@ -111,7 +111,7 @@ export default function DayDialog({ date, onClose }: { date: string; onClose: ()
         </ul>
         <p className="mt-1 text-xs text-base-content/50">Los números no cuentan esta fecha.</p>
 
-        <div className="modal-action justify-between">
+        <div className="modal-action flex-wrap justify-between gap-2">
           <div className="flex gap-2">
             {exists && (
               <button
