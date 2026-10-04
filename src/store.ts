@@ -3,8 +3,8 @@ import { persist } from 'zustand/middleware'
 import type { AppData, Person, Settings } from './types'
 
 export const PALETTE = [
-  '#2563eb', '#db2777', '#16a34a', '#d97706', '#7c3aed',
-  '#0891b2', '#dc2626', '#4d7c0f', '#c026d3', '#475569',
+  '#ec4899', '#a78bfa', '#f472b6', '#fb923c', '#60a5fa',
+  '#34d399', '#e879f9', '#f87171', '#2dd4bf', '#c084fc',
 ]
 
 export const defaultSettings: Settings = {

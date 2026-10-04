@@ -161,7 +161,7 @@ export default function CalendarView({
         <label className="flex cursor-pointer items-center gap-2 text-sm" title="Marca con ⚠ las guardias que empeoran la justicia; al pasar el mouse se ve por qué">
           <input
             type="checkbox"
-            className="toggle toggle-sm toggle-error"
+            className="toggle toggle-sm toggle-primary"
             checked={showProblems}
             onChange={(e) => setShowProblems(e.target.checked)}
           />
@@ -170,7 +170,7 @@ export default function CalendarView({
         <label className="flex cursor-pointer items-center gap-2 text-sm" title="Muestra en cada guardia sin asignar a quién recomienda el balance">
           <input
             type="checkbox"
-            className="toggle toggle-sm"
+            className="toggle toggle-sm toggle-primary"
             checked={showSuggestions}
             onChange={(e) => setShowSuggestions(e.target.checked)}
           />
@@ -178,7 +178,7 @@ export default function CalendarView({
         </label>
         {showSuggestions && (
           <button
-            className="btn btn-sm btn-success btn-outline ml-auto"
+            className="btn btn-sm btn-primary ml-auto"
             disabled={applicableCount === 0 || people.every((p) => !p.active)}
             onClick={applySuggestions}
           >
