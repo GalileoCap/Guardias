@@ -39,15 +39,25 @@
 }
 
 body {
-  background:
-    radial-gradient(60rem 30rem at 0% -10%, color-mix(in oklab, var(--color-primary) 13%, transparent), transparent),
-    radial-gradient(50rem 28rem at 100% 0%, color-mix(in oklab, var(--color-secondary) 14%, transparent), transparent),
-    var(--color-base-200);
-  background-attachment: fixed;
+  background: var(--color-base-200);
   min-height: 100vh;
   min-height: 100dvh;
   -webkit-tap-highlight-color: transparent;
   touch-action: manipulation; /* sin el retraso ni el zoom del doble toque */
+}
+
+/* Fondo con degradados fijo al scrollear. Va en su propia capa fija y no con `background-attachment: fixed`: en Safari
+   de iOS eso se repinta entero en cada cuadro del scroll y lo vuelve entrecortado. */
+body::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  background:
+    radial-gradient(60rem 30rem at 0% -10%, color-mix(in oklab, var(--color-primary) 13%, transparent), transparent),
+    radial-gradient(50rem 28rem at 100% 0%, color-mix(in oklab, var(--color-secondary) 14%, transparent), transparent);
+  transform: translateZ(0);
 }
 
 /* Barra de navegación inferior (teléfono) */
