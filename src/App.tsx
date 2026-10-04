@@ -11,7 +11,10 @@ export default function App() {
   return (
     <div className="mx-auto flex max-w-7xl flex-col gap-4 p-4">
       <header className="flex flex-wrap items-center justify-between gap-2">
-        <h1 className="font-display text-3xl font-semibold italic text-primary">Guardias <span className="text-secondary">♡</span></h1>
+        <h1 className="font-display flex items-center gap-2 text-3xl font-semibold italic text-primary">
+          <img src={`${import.meta.env.BASE_URL}favicon.svg`} alt="" className="size-9" />
+          Guardias
+        </h1>
         <div role="tablist" className="tabs tabs-box">
           <button role="tab" className={`tab ${tab === 'plan' ? 'tab-active' : ''}`} onClick={() => setTab('plan')}>
             Calendario

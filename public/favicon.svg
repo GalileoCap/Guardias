@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="Guardias">
+  <!-- Corazón -->
+  <path d="M32 58C9 42 3 30 3 20 3 11.500 9.500 5.500 17 5.500c6 0 11 3 15 9.500 4-6.500 9-9.500 15-9.500 7.500 0 14 6 14 14.500 0 10-6 22-29 38Z" fill="#ec4899"/>
+  <!-- Ojo -->
+  <path d="M10 30Q32 11 54 30Q32 49 10 30Z" fill="#fff"/>
+  <!-- Iris con cruz médica de pupila -->
+  <circle cx="32" cy="30" r="9.500" fill="#86275f"/>
+  <path d="M30.500 24.500h3v3.500h3.500v3h-3.500v3.500h-3v-3.500H27v-3h3.500Z" fill="#fff"/>
+</svg>
