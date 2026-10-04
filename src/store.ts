@@ -1,18 +1,15 @@
 import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
+import { defaultSettings } from './data'
+import { GROUP } from './group'
 import type { AppData, Person, Settings } from './types'
+
+export { defaultSettings }
 
 export const PALETTE = [
   '#ec4899', '#a78bfa', '#f472b6', '#fb923c', '#60a5fa',
   '#34d399', '#e879f9', '#f87171', '#2dd4bf', '#c084fc',
 ]
-
-export const defaultSettings: Settings = {
-  quirofanoOrder: [],
-  autoHolidays: true,
-  customHolidays: [],
-  countFrom: null,
-}
 
 type Actions = {
   addPerson: (name: string) => void
@@ -74,7 +71,8 @@ export const useStore = create<AppData & Actions>()(
       reset: () => set({ people: [], shifts: {}, quirofano: {}, settings: defaultSettings }),
     }),
     {
-      name: 'guardias-v1',
+      // en un grupo compartido, esto es solo la copia local (sin conexión) de los datos del servidor
+      name: GROUP ? `guardias-g-${GROUP}` : 'guardias-v1',
       version: 1,
       // merge profundo de settings: así los ajustes nuevos toman su valor por defecto con datos viejos
       merge: (persisted, current) => {

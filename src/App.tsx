@@ -2,6 +2,7 @@ import { useState } from 'react'
 import CalendarView from './components/CalendarView'
 import FairnessBar from './components/FairnessBar'
 import SettingsView from './components/SettingsView'
+import SyncBadge from './components/SyncBadge'
 
 type Tab = 'plan' | 'config'
 
@@ -15,6 +16,7 @@ export default function App() {
           <img src={`${import.meta.env.BASE_URL}favicon.svg`} alt="" className="size-9" />
           Guardias
         </h1>
+        <SyncBadge />
         <div role="tablist" className="tabs tabs-box">
           <button role="tab" className={`tab ${tab === 'plan' ? 'tab-active' : ''}`} onClick={() => setTab('plan')}>
             Calendario

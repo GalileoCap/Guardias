@@ -1,6 +1,8 @@
 import { useRef, useState } from 'react'
-import { defaultSettings, useStore } from '../store'
-import type { AppData } from '../types'
+import { normalize } from '../data'
+import { GROUP } from '../group'
+import { useStore } from '../store'
+import { createGroup } from '../sync'
 
 export default function SettingsView() {
   return (
@@ -270,20 +272,51 @@ function DataCard() {
     URL.revokeObjectURL(a.href)
   }
 
+  const copyLink = async () => {
+    try {
+      await navigator.clipboard.writeText(location.href)
+      alert('Enlace copiado. Cualquiera que lo tenga puede editar este grupo.')
+    } catch {
+      prompt('Copiá el enlace:', location.href)
+    }
+  }
+
+  const share = async () => {
+    if (!confirm('Se crea un grupo en el servidor con los datos actuales y pasás a trabajar ahí. Cualquiera que tenga el enlace podrá editarlo. ¿Seguir?')) return
+    try {
+      const url = await createGroup({ people, shifts, quirofano, settings })
+      location.href = url
+    } catch (e) {
+      alert(`No pude crear el grupo. ${e instanceof Error ? e.message : ''}`)
+    }
+  }
+
   const importJson = async (file: File) => {
     try {
-      const data = JSON.parse(await file.text()) as AppData
-      if (!Array.isArray(data.people) || typeof data.shifts !== 'object') throw new Error('formato')
-      if (confirm('Esto reemplaza todos los datos actuales. ¿Seguir?')) {
-        importData({ ...data, quirofano: data.quirofano ?? {}, settings: { ...defaultSettings, ...data.settings } })
-      }
+      const data = normalize(JSON.parse(await file.text()))
+      if (!data) throw new Error('formato')
+      if (confirm(`Esto reemplaza todos los datos actuales${GROUP ? ' para todo el grupo' : ''}. ¿Seguir?`)) importData(data)
     } catch {
       alert('No pude leer ese archivo.')
     }
   }
 
   return (
-    <Card title="Datos" hint="Todo vive en este navegador (localStorage). Exportá un respaldo de vez en cuando.">
+    <Card
+      title="Datos"
+      hint={
+        GROUP
+          ? 'Grupo compartido: los cambios se guardan en el servidor y los ve cualquiera que tenga el enlace. Importar o borrar todo afecta a todo el grupo.'
+          : 'Todo vive en este navegador (localStorage). Compartilo con un enlace para editarlo entre varias personas, y exportá un respaldo de vez en cuando.'
+      }
+    >
+      <div className="flex flex-wrap items-center gap-2">
+        {GROUP ? (
+          <button className="btn btn-sm btn-primary" onClick={copyLink}>Copiar enlace del grupo</button>
+        ) : (
+          <button className="btn btn-sm btn-primary" onClick={share}>Compartir…</button>
+        )}
+      </div>
       <div className="flex flex-wrap gap-2">
         <button className="btn btn-sm" onClick={exportJson}>Exportar JSON</button>
         <button className="btn btn-sm" onClick={() => fileRef.current?.click()}>Importar JSON</button>
@@ -300,7 +333,9 @@ function DataCard() {
         />
         <button
           className="btn btn-sm btn-error btn-soft ml-auto"
-          onClick={() => confirm('Se borran personas, guardias y configuración. ¿Seguro?') && reset()}
+          onClick={() =>
+            confirm(`Se borran personas, guardias y configuración${GROUP ? ' de todo el grupo' : ''}. ¿Seguro?`) && reset()
+          }
         >
           Borrar todo
         </button>

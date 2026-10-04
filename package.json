@@ -5,7 +5,9 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "tsc --noEmit && vite build",
+    "dev:server": "node --disable-warning=ExperimentalWarning scripts/build-server.mjs && PORT=3002 DATA_DIR=.data node --watch --watch-path=server --watch-path=src/data.ts server/index.mjs",
+    "build": "tsc --noEmit && vite build && node scripts/precompress.mjs && node --disable-warning=ExperimentalWarning scripts/build-server.mjs",
+    "start": "node server/index.mjs",
     "preview": "vite preview"
   },
   "dependencies": {
@@ -28,5 +30,8 @@
     "tailwindcss": "^4.3.3",
     "typescript": "^7.0.2",
     "vite": "^8.3.2"
+  },
+  "engines": {
+    "node": ">=22.13"
   }
 }
