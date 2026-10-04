@@ -9,6 +9,7 @@ import { hasIssue, rankCandidates, suggestAssignments } from '../fairness'
 import { contrastText, useHolidayLookup, useProblems, useQuirofano } from '../hooks'
 import { useStore } from '../store'
 import DayDialog from './DayDialog'
+import Icon from './Icon'
 import QuirofanoDialog from './QuirofanoDialog'
 import WeekGutter from './WeekGutter'
 
@@ -26,10 +27,10 @@ const BUTTON_TEXT = { today: 'Hoy' }
 const renderEvent = (arg: EventContentArg) => {
   const { problems, soft, tip } = arg.event.extendedProps as { problems?: string[]; soft?: boolean; tip?: string }
   const tooltip = tip ?? (problems && [...problems, ...(soft ? ['(Ninguna otra persona lo haría mejor)'] : [])].join('\n'))
-  // Aviso fuerte: ⚠ pleno. Si no había mejor opción: el mismo ícono pero tenue, además del borde punteado
+  // Aviso fuerte: ícono de advertencia pleno. Si no había mejor opción: el mismo ícono pero tenue, además del borde punteado
   return (
     <span title={tooltip} className="block truncate">
-      {problems?.length ? <span className={`hidden sm:inline ${soft ? 'opacity-50' : ''}`}>⚠ </span> : ''}
+      {problems?.length ? <Icon name="warning" className={`mr-1 hidden size-3 -translate-y-px sm:inline-block ${soft ? 'opacity-50' : ''}`} /> : ''}
       {arg.event.title}
     </span>
   )
@@ -157,7 +158,8 @@ export default function CalendarView({
             Asignar
           </button>
           <button className={`btn btn-sm join-item ${mode === 'mark' ? 'btn-primary' : ''}`} onClick={() => setMode('mark')}>
-            Marcar días<span className="hidden sm:inline">&nbsp;de guardia</span>
+            <span className="sm:hidden">Marcar días</span>
+            <span className="hidden sm:inline">Marcar días de guardia</span>
           </button>
         </div>
         <button
@@ -165,10 +167,10 @@ export default function CalendarView({
           aria-expanded={showOptions}
           onClick={() => setShowOptions((v) => !v)}
         >
-          Opciones {showOptions ? '▴' : '▾'}
+          Opciones <Icon name={showOptions ? 'up' : 'down'} />
         </button>
         <div className={`${showOptions ? 'flex' : 'hidden'} w-full flex-col gap-2 sm:flex sm:w-auto sm:flex-row sm:items-center sm:gap-3`}>
-          <label className="flex cursor-pointer items-center gap-2 text-sm" title="Marca con ⚠ las guardias que empeoran la justicia; al pasar el mouse se ve por qué">
+          <label className="flex cursor-pointer items-center gap-2 text-sm" title="Marca con un aviso las guardias que empeoran la justicia; al pasar el mouse se ve por qué">
             <input
               type="checkbox"
               className="toggle toggle-sm toggle-primary"
@@ -217,7 +219,8 @@ export default function CalendarView({
           {highlighted && (
             <button className="btn btn-sm btn-ghost max-w-full gap-2" onClick={() => onHighlight(null)}>
               <span className="inline-block size-3 shrink-0 rounded-full" style={{ background: highlighted.color }} />
-              <span className="truncate">Resaltando a {highlighted.name} ✕</span>
+              <span className="truncate">Resaltando a {highlighted.name}</span>
+              <Icon name="close" className="size-3" />
             </button>
           )}
         </div>

@@ -2,13 +2,14 @@ import { useState } from 'react'
 import CalendarView from './components/CalendarView'
 import FairnessBar from './components/FairnessBar'
 import SettingsView from './components/SettingsView'
+import Icon, { type IconName } from './components/Icon'
 import SyncBadge from './components/SyncBadge'
 
 type Tab = 'plan' | 'config'
 
-const TABS: { key: Tab; label: string; icon: string }[] = [
-  { key: 'plan', label: 'Calendario', icon: '📅' },
-  { key: 'config', label: 'Configuración', icon: '⚙️' },
+const TABS: { key: Tab; label: string; icon: IconName }[] = [
+  { key: 'plan', label: 'Calendario', icon: 'calendar' },
+  { key: 'config', label: 'Configuración', icon: 'settings' },
 ]
 
 export default function App() {
@@ -51,7 +52,7 @@ export default function App() {
               scrollTo({ top: 0 })
             }}
           >
-            <span aria-hidden className="text-lg leading-none">{t.icon}</span>
+            <Icon name={t.icon} className="size-5" />
             <span className="dock-label">{t.label}</span>
           </button>
         ))}

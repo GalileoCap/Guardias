@@ -3,6 +3,7 @@ import { normalize } from '../data'
 import { GROUP } from '../group'
 import { useStore } from '../store'
 import { createGroup } from '../sync'
+import Icon from './Icon'
 
 export default function SettingsView() {
   return (
@@ -81,7 +82,7 @@ function PeopleCard() {
                 if (confirm(msg)) removePerson(p.id)
               }}
             >
-              ✕
+              <Icon name="close" />
             </button>
           </li>
         ))}
@@ -140,7 +141,7 @@ function QuirofanoCard() {
                     {!p.active && ' (inactiva: se saltea)'}
                   </span>
                   <button className="btn btn-ghost btn-sm sm:btn-xs" disabled={i === 0} title="Subir" onClick={() => move(i, -1)}>
-                    ↑
+                    <Icon name="arrowUp" />
                   </button>
                   <button
                     className="btn btn-ghost btn-sm sm:btn-xs"
@@ -148,14 +149,14 @@ function QuirofanoCard() {
                     title="Bajar"
                     onClick={() => move(i, 1)}
                   >
-                    ↓
+                    <Icon name="arrowDown" />
                   </button>
                   <button
                     className="btn btn-ghost btn-sm sm:btn-xs text-error"
                     title="Sacar de la rotación"
                     onClick={() => setOrder(order.filter((x) => x !== id))}
                   >
-                    ✕
+                    <Icon name="close" />
                   </button>
                 </li>
               )
@@ -245,7 +246,7 @@ function HolidaysCard() {
                 className="btn btn-ghost btn-xs text-error"
                 onClick={() => updateSettings({ customHolidays: settings.customHolidays.filter((x) => x.date !== h.date) })}
               >
-                ✕
+                <Icon name="close" />
               </button>
             </li>
           ))}
