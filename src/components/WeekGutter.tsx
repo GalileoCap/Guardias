@@ -1,0 +1,109 @@
+import { useCallback, useEffect, useState, type RefObject } from 'react'
+import { weekOf } from '../fairness'
+import { contrastText } from '../hooks'
+import type { Person } from '../types'
+
+export const GUTTER_WIDTH = 38
+
+type Row = { week: string; top: number; height: number }
+type Layout = { rows: Row[]; headerTop: number | null }
+
+/**
+ * Columna a la izquierda del calendario con quién es quirofanera/o cada semana.
+ * FullCalendar no tiene una columna lateral propia, así que se mide dónde cae cada fila de semana
+ * en el DOM y se dibuja una etiqueta alineada con ella.
+ */
+export default function WeekGutter({
+  containerRef,
+  assigned,
+  manual,
+  peopleById,
+  highlightId,
+  onOpen,
+}: {
+  containerRef: RefObject<HTMLDivElement | null>
+  /** Quién va cada semana (lo cargado a mano + lo autocompletado) */
+  assigned: Record<string, string>
+  /** Solo lo cargado a mano */
+  manual: Record<string, string>
+  peopleById: Map<string, Person>
+  highlightId: string | null
+  onOpen: (week: string) => void
+}) {
+  const [layout, setLayout] = useState<Layout>({ rows: [], headerTop: null })
+
+  const measure = useCallback(() => {
+    const root = containerRef.current
+    if (!root) return
+    const base = root.getBoundingClientRect().top
+    const rows: Row[] = []
+    root.querySelectorAll<HTMLElement>('.fc-daygrid-body tbody tr').forEach((tr) => {
+      const date = tr.querySelector<HTMLElement>('td[data-date]')?.dataset.date
+      if (!date) return
+      const rect = tr.getBoundingClientRect()
+      rows.push({ week: weekOf(date), top: Math.round(rect.top - base), height: Math.round(rect.height) })
+    })
+    const header = root.querySelector('.fc-col-header')
+    const headerTop = header ? Math.round(header.getBoundingClientRect().top - base) : null
+    setLayout((prev) => (JSON.stringify(prev) === JSON.stringify({ rows, headerTop }) ? prev : { rows, headerTop }))
+  }, [containerRef])
+
+  useEffect(() => {
+    const root = containerRef.current
+    if (!root) return
+    let frame = 0
+    const schedule = () => {
+      cancelAnimationFrame(frame)
+      frame = requestAnimationFrame(measure)
+    }
+    const resize = new ResizeObserver(schedule)
+    const mutation = new MutationObserver(schedule)
+    resize.observe(root)
+    mutation.observe(root, { childList: true, subtree: true })
+    schedule()
+    return () => {
+      cancelAnimationFrame(frame)
+      resize.disconnect()
+      mutation.disconnect()
+    }
+  }, [containerRef, measure])
+
+  return (
+    <div className="pointer-events-none absolute left-3 top-0" style={{ width: GUTTER_WIDTH - 12 }}>
+      {layout.headerTop !== null && (
+        <div
+          className="absolute w-full text-center text-[10px] font-semibold uppercase text-base-content/60"
+          style={{ top: layout.headerTop + 8 }}
+          title="Quirófano"
+        >
+          Quir.
+        </div>
+      )}
+      {layout.rows.map(({ week, top, height }, i) => {
+        const person = peopleById.get(assigned[week])
+        const dimmed = highlightId !== null && person?.id !== highlightId
+        return (
+          <button
+            key={`${week}-${i}`}
+            className={`q-vertical pointer-events-auto absolute w-full truncate rounded text-center text-xs ${
+              person ? 'q-chip font-medium' : 'border border-dashed border-base-content/60 italic opacity-60'
+            } ${dimmed ? 'opacity-20' : ''}`}
+            style={{
+              top: top + 2,
+              height: height - 4,
+              ...(person && { background: person.color, borderColor: person.color, color: contrastText(person.color) }),
+            }}
+            title={
+              person
+                ? `Quirófano: ${person.name}${week in manual ? '' : ' (automático según el orden)'}`
+                : 'Quirófano: sin asignar'
+            }
+            onClick={() => onOpen(week)}
+          >
+            {person ? person.name : 'sin asignar'}
+          </button>
+        )
+      })}
+    </div>
+  )
+}
