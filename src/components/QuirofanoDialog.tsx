@@ -2,13 +2,14 @@ import { addDays, format, parseISO } from 'date-fns'
 import { es } from 'date-fns/locale'
 import { useMemo } from 'react'
 import { rankQuirofano } from '../fairness'
-import { useHolidayLookup, useQuirofano } from '../hooks'
+import { useHolidayLookup, useIgnoreGhostClick, useQuirofano } from '../hooks'
 import { useStore } from '../store'
 
 const fmt = (d: Date) => format(d, "d 'de' MMM", { locale: es })
 
 export default function QuirofanoDialog({ week, onClose }: { week: string; onClose: () => void }) {
   const { people, quirofano: manualMap, settings, setQuirofano } = useStore()
+  const ghostGuard = useIgnoreGhostClick()
   const quirofano = useQuirofano() // lo cargado a mano + lo autocompletado por el orden
   const holiday = useHolidayLookup()
   const manual = manualMap[week] ?? null
@@ -26,7 +27,7 @@ export default function QuirofanoDialog({ week, onClose }: { week: string; onClo
   }
 
   return (
-    <dialog className="modal modal-open modal-bottom sm:modal-middle" onClick={(e) => e.target === e.currentTarget && onClose()}>
+    <dialog className="modal modal-open modal-bottom sm:modal-middle" {...ghostGuard} onClick={(e) => e.target === e.currentTarget && onClose()}>
       <div className="modal-box max-w-md">
         <h3 className="text-lg font-bold">Quirófano</h3>
         <p className="text-sm text-base-content/70">

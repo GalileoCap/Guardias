@@ -1,7 +1,25 @@
-import { useMemo } from 'react'
+import { useMemo, useRef, type MouseEvent } from 'react'
 import { computeCounts, computeFairness, effectiveQuirofano, shiftProblems } from './fairness'
 import { makeHolidayLookup } from './holidays'
 import { useStore } from './store'
+
+/**
+ * Props para el <dialog> de un modal que se abre al tocar algo de la pantalla. FullCalendar avisa del toque al soltar
+ * el puntero, antes de que el navegador mande el `click`: el modal aparece justo debajo del dedo (o del mouse) y ese
+ * `click` cae sobre lo que haya ahí, por ejemplo una opción, que se elegiría sola. Se descartan los clics de los
+ * primeros instantes, que no pueden ser de alguien que ya vio el modal.
+ */
+export function useIgnoreGhostClick() {
+  const openedAt = useRef(performance.now())
+  return {
+    onClickCapture: (e: MouseEvent) => {
+      if (performance.now() - openedAt.current < 400) {
+        e.stopPropagation()
+        e.preventDefault()
+      }
+    },
+  }
+}
 
 export function useHolidayLookup() {
   const settings = useStore((s) => s.settings)

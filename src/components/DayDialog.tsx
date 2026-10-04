@@ -2,7 +2,7 @@ import { format, parseISO } from 'date-fns'
 import { es } from 'date-fns/locale'
 import { useMemo } from 'react'
 import { CATEGORIES, categoriesOf, hasIssue, rankCandidates } from '../fairness'
-import { useHolidayLookup, useProblems, useQuirofano } from '../hooks'
+import { useHolidayLookup, useIgnoreGhostClick, useProblems, useQuirofano } from '../hooks'
 import { useStore } from '../store'
 
 const days = (n: number) => (n === 1 ? '1 día' : `${n} días`)
@@ -14,6 +14,7 @@ function nearestLabel(before: number | null, after: number | null) {
 
 export default function DayDialog({ date, onClose }: { date: string; onClose: () => void }) {
   const { people, shifts, settings, setShift, removeShift } = useStore()
+  const ghostGuard = useIgnoreGhostClick()
   const quirofano = useQuirofano()
   const holiday = useHolidayLookup()
   const holidayName = holiday(date)
@@ -39,7 +40,7 @@ export default function DayDialog({ date, onClose }: { date: string; onClose: ()
   }
 
   return (
-    <dialog className="modal modal-open modal-bottom sm:modal-middle" onClick={(e) => e.target === e.currentTarget && onClose()}>
+    <dialog className="modal modal-open modal-bottom sm:modal-middle" {...ghostGuard} onClick={(e) => e.target === e.currentTarget && onClose()}>
       <div className="modal-box max-w-md">
         <h3 className="text-lg font-bold first-letter:uppercase">{format(parseISO(date), "EEEE d 'de' MMMM", { locale: es })}</h3>
         <div className="mt-1 flex flex-wrap gap-2">
