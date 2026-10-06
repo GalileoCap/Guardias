@@ -133,6 +133,7 @@ body::before {
 .cal-card { --pad: 0.375rem; --chip: 10px; --gutter: 18px; padding: var(--pad); }
 .cal-gutter { left: var(--pad); width: var(--chip); }
 .cal-body { margin-left: var(--gutter); }
+.cal-card.no-gutter .cal-body { margin-left: 0; }
 @media (min-width: 640px) {
   .cal-card { --pad: 0.75rem; --chip: 26px; --gutter: 38px; }
 }

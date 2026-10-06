@@ -111,11 +111,35 @@ function QuirofanoCard() {
     setOrder(next)
   }
 
+  const toggle = (
+    <label className="flex cursor-pointer items-center gap-3 text-sm">
+      <input
+        type="checkbox"
+        className="toggle toggle-primary toggle-sm"
+        checked={settings.quirofanoEnabled}
+        onChange={(e) => updateSettings({ quirofanoEnabled: e.target.checked })}
+      />
+      <span className="font-medium">Usar quirófano</span>
+    </label>
+  )
+
+  if (!settings.quirofanoEnabled) {
+    return (
+      <Card
+        title="Quirófano"
+        hint="Apagado: el calendario no muestra al quirofanero y las guardias se reparten sin tener en cuenta ninguna semana de quirófano. Lo ya cargado se conserva por si lo volvés a prender."
+      >
+        {toggle}
+      </Card>
+    )
+  }
+
   return (
     <Card
       title="Orden del quirófano"
       hint="Cada semana le toca a la persona siguiente de la lista; al llegar al final vuelve a la primera. El calendario completa solo el quirófano con este orden: si fijás a alguien a mano en una semana, las siguientes siguen desde ahí."
     >
+      {toggle}
       {order.length === 0 ? (
         <div className="flex items-center gap-2 text-sm">
           <span className="text-base-content/60">Sin orden definido: se rota por el orden de la lista de personas.</span>

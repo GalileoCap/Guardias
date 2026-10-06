@@ -51,6 +51,7 @@ HOST=127.0.0.1 PORT=3000 DATA_DIR=/var/lib/guardias node --max-old-space-size=40
 ## Respaldo
 
 Copiar `DATA_DIR` alcanza (archivos chicos, escritura atómica). También se puede exportar desde la app.
+`./deploy.sh` baja antes de cada despliegue un backup de los datos de producción a `backups/` (ignorada por git).
 
 ## Desarrollo
 

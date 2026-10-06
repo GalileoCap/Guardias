@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Compila y publica en Opalstack: sube dist/ y server/, reinicia la app y verifica que responda.
-# Los datos (~/apps/guardias/data) no se tocan. Variables opcionales: DEPLOY_HOST, DEPLOY_DIR, DEPLOY_URL.
+# Los datos (~/apps/guardias/data) no se tocan, y antes de subir se baja un backup a ./backups/ (si falla, no se despliega). Variables opcionales: DEPLOY_HOST, DEPLOY_DIR, DEPLOY_URL.
 set -euo pipefail
 cd "$(dirname "$0")"
 
@@ -23,6 +23,13 @@ for i in 1 2 3 4 5 6; do
   echo "  (conexión rechazada, reintento en 15 s)"
   sleep 15
 done
+
+echo "→ Backup de los datos de producción"
+mkdir -p backups
+backup="backups/guardias-data-$(date +%Y%m%d-%H%M%S).tar.gz"
+ssh_ "tar -czf - -C ~/$APP data" > "$backup"
+tar -tzf "$backup" > /dev/null || { echo "✗ El backup quedó dañado: $backup" >&2; exit 1; }
+echo "  $backup ($(ls "$backup" | wc -l | tr -d ' ') archivo, $(du -h "$backup" | cut -f1))"
 
 echo "→ Subiendo"
 rsync -a --delete -e "ssh $SSH_OPTS" dist/ "$HOST:$APP/myproject/dist/"

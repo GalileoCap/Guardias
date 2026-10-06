@@ -234,9 +234,14 @@ export default function CalendarView({
         <span className={`min-w-0 text-sm text-base-content/60 ${highlighted ? 'hidden sm:inline' : ''}`}>
           {mode === 'assign' ? (
             <>
-              <span className="sm:hidden">Tocá un día para asignarlo, o el quirofanero de la izquierda.</span>
+              <span className="sm:hidden">
+                {settings.quirofanoEnabled ? 'Tocá un día para asignarlo, o el quirofanero de la izquierda.' : 'Tocá un día para asignarlo.'}
+              </span>
               <span className="hidden sm:inline">
-                Tocá un día para asignarlo, o el quirofanero de la izquierda para cambiarlo. Tocá una persona de abajo para resaltar sus guardias.
+                {settings.quirofanoEnabled
+                  ? 'Tocá un día para asignarlo, o el quirofanero de la izquierda para cambiarlo. '
+                  : 'Tocá un día para asignarlo. '}
+                Tocá una persona de abajo para resaltar sus guardias.
               </span>
             </>
           ) : (
@@ -255,15 +260,17 @@ export default function CalendarView({
         </div>
       </div>
 
-      <div ref={cardRef} className="cal-card card card-border bg-base-100 relative">
-        <WeekGutter
-          containerRef={cardRef}
-          assigned={quirofano}
-          manual={manualQuirofano}
-          peopleById={peopleById}
-          highlightId={highlightId}
-          onOpen={setOpenWeek}
-        />
+      <div ref={cardRef} className={`cal-card card card-border bg-base-100 relative ${settings.quirofanoEnabled ? '' : 'no-gutter'}`}>
+        {settings.quirofanoEnabled && (
+          <WeekGutter
+            containerRef={cardRef}
+            assigned={quirofano}
+            manual={manualQuirofano}
+            peopleById={peopleById}
+            highlightId={highlightId}
+            onOpen={setOpenWeek}
+          />
+        )}
         <div className="cal-body">
           <FullCalendar
             plugins={PLUGINS}
@@ -287,7 +294,7 @@ export default function CalendarView({
       </div>
 
       {openDate && <DayDialog date={openDate} onClose={() => setOpenDate(null)} />}
-      {openWeek && <QuirofanoDialog week={openWeek} onClose={() => setOpenWeek(null)} />}
+      {openWeek && settings.quirofanoEnabled && <QuirofanoDialog week={openWeek} onClose={() => setOpenWeek(null)} />}
     </div>
   )
 }

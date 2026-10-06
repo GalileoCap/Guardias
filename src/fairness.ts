@@ -617,6 +617,7 @@ export function suggestQuirofano(
  * El quirófano de cada semana: lo cargado a mano más, en las semanas sin asignar, lo que corresponde por el
  * orden de rotación. Cubre desde la primera semana con guardias (o de `extraWeeks`) hasta una después de la última.
  */
+const NO_QUIROFANO: Quirofano = {}
 export const effectiveQuirofano = memoLast(function effectiveQuirofano(
   people: Person[],
   shifts: Shifts,
@@ -624,6 +625,7 @@ export const effectiveQuirofano = memoLast(function effectiveQuirofano(
   settings: Settings,
   extraWeeks: string[] = [],
 ): Quirofano {
+  if (!settings.quirofanoEnabled) return NO_QUIROFANO
   const weeks = [...Object.keys(shifts).map(weekOf), ...extraWeeks].sort()
   if (weeks.length === 0) return quirofano
   const last = shiftWeek(weeks[weeks.length - 1], 7)

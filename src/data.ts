@@ -3,6 +3,7 @@
 import type { AppData, Person, Quirofano, Settings, Shifts } from './types'
 
 export const defaultSettings: Settings = {
+  quirofanoEnabled: true,
   quirofanoOrder: [],
   autoHolidays: true,
   customHolidays: [],
@@ -43,6 +44,7 @@ export function normalize(raw: unknown): AppData | null {
   for (const [d, v] of Object.entries(obj(raw.quirofano))) if (DATE.test(d) && typeof v === 'string') quirofano[d] = v
   const s = obj(raw.settings)
   const settings: Settings = {
+    quirofanoEnabled: typeof s.quirofanoEnabled === 'boolean' ? s.quirofanoEnabled : defaultSettings.quirofanoEnabled,
     quirofanoOrder: arr(s.quirofanoOrder).filter((x): x is string => typeof x === 'string'),
     autoHolidays: typeof s.autoHolidays === 'boolean' ? s.autoHolidays : defaultSettings.autoHolidays,
     customHolidays: arr(s.customHolidays)

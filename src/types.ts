@@ -14,6 +14,8 @@ export type Quirofano = Record<string, string>
 export type CustomHoliday = { date: string; name: string }
 
 export type Settings = {
+  /** Usar el quirófano (el quirofanero de cada semana). Se apaga en los grupos que no hacen quirofanismo (p. ej. R2) */
+  quirofanoEnabled: boolean
   /** Orden fijo de rotación del quirófano (ids de personas); al final vuelve al primero */
   quirofanoOrder: string[]
   /** Usar feriados nacionales de Argentina (librería date-holidays) */

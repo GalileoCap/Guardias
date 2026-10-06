@@ -35,6 +35,7 @@ export default function FairnessBar({
   onHighlight: (id: string | null) => void
 }) {
   const people = useStore((s) => s.people).filter((p) => p.active)
+  const quirofanoEnabled = useStore((s) => s.settings.quirofanoEnabled)
   const { counts, fairness } = useFairness()
 
   if (people.length === 0) {
@@ -47,7 +48,7 @@ export default function FairnessBar({
 
   const totalShifts = people.reduce((sum, p) => sum + counts[p.id].total, 0)
   // "Total" y la justicia por persona ya están en las tarjetas de arriba
-  const columns = CATEGORIES.filter((c) => c.key !== 'total')
+  const columns = CATEGORIES.filter((c) => c.key !== 'total' && (quirofanoEnabled || c.key !== 'inQuirofano'))
 
   return (
     <div className="flex flex-col gap-3">
