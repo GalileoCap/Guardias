@@ -122,18 +122,18 @@ export function categoriesOf(date: string, holiday: HolidayLookup): ShiftCategor
   return cats
 }
 
-function inWindow(date: string, settings: Settings) {
+export function inWindow(date: string, settings: Settings) {
   return !settings.countFrom || date >= settings.countFrom
 }
 
 /** Días de su semana de quirófano (desde el lunes) en los que no conviene tener guardia: lunes a jueves, sábado y domingo. */
-const QUIROFANO_AVOID_OFFSETS = [0, 1, 2, 3, 5, 6]
+export const QUIROFANO_AVOID_OFFSETS = [0, 1, 2, 3, 5, 6]
 
 /**
  * Días (desde el lunes de su semana de quirófano) en los que sí conviene tener guardia: su viernes, de lunes a viernes
  * de la semana anterior y el domingo previo. El sábado anterior no.
  */
-const QUIROFANO_PREFER_OFFSETS = [4, -7, -6, -5, -4, -3, -1]
+export const QUIROFANO_PREFER_OFFSETS = [4, -7, -6, -5, -4, -3, -1]
 
 /** ¿Tiene guardia el sábado o el domingo de la semana `week` (lunes)? */
 const busyOn = (shifts: Shifts, week: string, personId: string) =>
@@ -355,9 +355,9 @@ export function computeFairness(counts: Record<string, Counts>): Fairness {
 export type Score = { bad: number[]; fair: number; pre: number; spacing: number }
 
 /** Cuánto vale cada guardia bien ubicada alrededor del quirófano, en puntos de "qué tan parejo" (0..1) */
-const PRE_QUIROFANO_BONUS = 0.03
+export const PRE_QUIROFANO_BONUS = 0.03
 /** El espaciado entre guardias no suma más allá de estos días */
-const SPACING_CAP_DAYS = 14
+export const SPACING_CAP_DAYS = 14
 
 export function scoreOf(counts: Record<string, Counts>): Score {
   const rows = Object.values(counts)
@@ -546,66 +546,6 @@ export function rankCandidates(
       return { person, counts: c, gaps, weekend, newSandwich, around, score }
     })
     .sort((a, b) => compareScores(b.score, a.score))
-}
-
-/** Cuántas veces se revisan todas las guardias buscando un cambio que mejore el reparto */
-const MAX_IMPROVE_PASSES = 4
-
-/**
- * Propone asignaciones para las guardias sin asignar de `dates`.
- * Primero los días más "pesados" (fin de semana / feriado), después los comunes, y en cada paso
- * elige a la mejor candidata teniendo en cuenta lo ya propuesto. Después revisa de a una cada guardia
- * propuesta (y las de `movable`, ya cargadas, que también se pueden reacomodar) probando a las demás personas,
- * y se queda con cada cambio que mejora el reparto completo. Devuelve lo propuesto para `dates` y, de `movable`,
- * solo lo que cambia.
- */
-export function suggestAssignments(
-  dates: string[],
-  people: Person[],
-  shifts: Shifts,
-  quirofano: Quirofano,
-  settings: Settings,
-  holiday: HolidayLookup,
-  movable: string[] = [],
-): Record<string, string> {
-  const working: Shifts = { ...shifts }
-  const result: Record<string, string> = {}
-  const ordered = [...dates].sort(
-    (a, b) => categoriesOf(b, holiday).length - categoriesOf(a, holiday).length || a.localeCompare(b),
-  )
-  for (const date of ordered) {
-    const best = rankCandidates(date, people, working, quirofano, settings, holiday)[0]
-    if (!best) break
-    working[date] = best.person.id
-    result[date] = best.person.id
-  }
-
-  const active = people.filter((p) => p.active)
-  const free = [...ordered, ...movable.filter((d) => working[d])]
-  if (active.length > 1 && free.length > 0) {
-    let best = scoreShifts(people, working, quirofano, settings, holiday)
-    for (let pass = 0; pass < MAX_IMPROVE_PASSES; pass++) {
-      let improved = false
-      for (const date of free) {
-        const keep = working[date]
-        let bestId = keep
-        for (const p of active) {
-          if (p.id === keep) continue
-          working[date] = p.id
-          const score = scoreShifts(people, working, quirofano, settings, holiday)
-          if (compareScores(score, best) > 0) {
-            best = score
-            bestId = p.id
-            improved = true
-          }
-        }
-        working[date] = bestId
-      }
-      if (!improved) break
-    }
-  }
-  for (const date of free) if (working[date] && (dates.includes(date) || working[date] !== shifts[date])) result[date] = working[date]!
-  return result
 }
 
 // ---------------------------------------------------------------------------

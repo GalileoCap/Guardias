@@ -6,7 +6,8 @@ import interactionPlugin from '@fullcalendar/interaction'
 import FullCalendar from '@fullcalendar/react'
 import { useCallback, useMemo, useRef, useState } from 'react'
 import { addDaysTo, isoOf, mondayOf } from '../dates'
-import { hasIssue, rankCandidates, scoreShifts, suggestAssignments } from '../fairness'
+import { hasIssue, rankCandidates, scoreShifts } from '../fairness'
+import { suggestAssignments } from '../search'
 import { contrastText, useHolidayLookup, useProblems, useQuirofano } from '../hooks'
 import { useStore } from '../store'
 import ApplyDialog, { type Reshuffle } from './ApplyDialog'
@@ -103,7 +104,7 @@ export default function CalendarView({
     const movable = Object.entries(shifts)
       .filter(([date, personId]) => personId && date >= today && inVisibleMonth(date))
       .map(([date]) => date)
-    const full = suggestAssignments(unassignedDates, people, shifts, quirofano, settings, holiday, movable)
+    const full = suggestAssignments(unassignedDates, people, shifts, quirofano, settings, holiday, movable, 3)
     const changes = movable
       .filter((date) => full[date] && full[date] !== shifts[date])
       .map((date) => ({ date, from: peopleById.get(shifts[date]!)!, to: peopleById.get(full[date])! }))
