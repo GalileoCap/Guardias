@@ -9,7 +9,6 @@ export type Category =
   | 'consecutive'
   | 'backToBack'
   | 'sandwich'
-  | 'inQuirofano'
   | 'freeLongWeekends'
 
 /** Métricas que se muestran y puntúan. `worse: 'low'` = en esa métrica lo malo es tener menos (el resto: lo malo es tener más). */
@@ -50,12 +49,6 @@ export const CATEGORIES: {
     hint: 'Veces que tuvo guardia, un día libre y otra guardia (tres días: Guardia, No guardia, Guardia)',
   },
   {
-    key: 'inQuirofano',
-    label: 'Guardias en quirófano',
-    short: 'En quirófano',
-    hint: 'Guardias que tuvo durante su semana de quirófano, salvo el viernes (lo ideal es hacerlas la semana anterior y el viernes)',
-  },
-  {
     key: 'freeLongWeekends',
     label: 'Findes largos libres',
     short: 'Largos libres',
@@ -68,7 +61,7 @@ export const CATEGORIES: {
  * Las "cosas malas": lo ideal es que no haya ninguna, así que se miden por cantidad (no por reparto parejo: una sola,
  * aunque sea de una persona, ya es peor que ninguna). En este orden de prioridad, de peor a menos grave.
  */
-export const BAD_CATEGORIES: Category[] = ['backToBack', 'sandwich', 'consecutive', 'inQuirofano']
+export const BAD_CATEGORIES: Category[] = ['backToBack', 'sandwich', 'consecutive']
 const isBad = (key: Category) => BAD_CATEGORIES.includes(key)
 
 /** Lunes de la semana de `date` ('YYYY-MM-DD'), que es la clave de `quirofano` y de cada finde. */
@@ -105,7 +98,6 @@ const emptyCounts = (): Counts => ({
   consecutive: 0,
   backToBack: 0,
   sandwich: 0,
-  inQuirofano: 0,
   freeLongWeekends: 0,
   busyWeekends: 0,
   longWeekends: 0,
@@ -125,9 +117,6 @@ export function categoriesOf(date: string, holiday: HolidayLookup): ShiftCategor
 export function inWindow(date: string, settings: Settings) {
   return !settings.countFrom || date >= settings.countFrom
 }
-
-/** Días de su semana de quirófano (desde el lunes) en los que no conviene tener guardia: lunes a jueves, sábado y domingo. */
-export const QUIROFANO_AVOID_OFFSETS = [0, 1, 2, 3, 5, 6]
 
 /**
  * Días (desde el lunes de su semana de quirófano) en los que sí conviene tener guardia: su viernes, de lunes a viernes
@@ -230,9 +219,6 @@ function countShifts(
     // la semana cuenta si termina (domingo) dentro de la ventana
     if (!counts[personId] || !inWindow(shiftWeek(week, 6), settings)) continue
     counts[personId].quirofano++
-    for (const offset of QUIROFANO_AVOID_OFFSETS) {
-      if (shifts[shiftWeek(week, offset)] === personId) counts[personId].inQuirofano++
-    }
     for (const offset of QUIROFANO_PREFER_OFFSETS) {
       // la semana anterior es "pre" solo si no es también de quirófano suya
       if (offset < 0 && quirofano[shiftWeek(week, -7)] === personId) continue
@@ -289,7 +275,6 @@ function categoryScores(rows: Counts[]) {
   const means = emptyCounts()
   const anyWeekendWork = rows.some((r) => r.busyWeekends > 0)
   const anyWork = rows.some((r) => r.total > 0)
-  const anyQuirofano = rows.some((r) => r.quirofano > 0)
   const anyLongWeekend = rows.some((r) => r.longWeekends > 0)
   for (const { key } of CATEGORIES) {
     const values = rows.map((r) => r[key])
@@ -299,13 +284,11 @@ function categoryScores(rows: Counts[]) {
     const hasData =
       key === 'sandwich' || key === 'backToBack'
         ? anyWork
-        : key === 'inQuirofano'
-          ? anyQuirofano
-          : key === 'freeLongWeekends'
-            ? anyLongWeekend
-            : key === 'consecutive' || key === 'freeWeekends'
-              ? anyWeekendWork
-              : false
+        : key === 'freeLongWeekends'
+          ? anyLongWeekend
+          : key === 'consecutive' || key === 'freeWeekends'
+            ? anyWeekendWork
+            : false
     if (isBad(key)) {
       perCategory[key] = hasData && values.length ? 1 - Math.min(1, sum / values.length) : null
       continue
@@ -348,7 +331,7 @@ export function computeFairness(counts: Record<string, Counts>): Fairness {
 
 /**
  * Un reparto es mejor que otro si, en este orden: tiene menos guardias seguidas, menos sanguchitos, menos findes
- * seguidos y menos guardias en la semana de quirófano (`bad`, en el orden de `BAD_CATEGORIES`); y si empatan, si está
+ * seguidos (`bad`, en el orden de `BAD_CATEGORIES`); y si empatan, si está
  * más parejo en las columnas de reparto (`fair`) sumando un premio por cada guardia bien ubicada alrededor del
  * quirófano (`pre`); y si siguen empatados, si las guardias de cada persona quedan más separadas (`spacing`).
  */
@@ -392,7 +375,7 @@ export function scoreShifts(people: Person[], shifts: Shifts, quirofano: Quirofa
 
 /**
  * Para cada guardia asignada, los motivos por los que empeora la justicia (ver las columnas de la tabla):
- * guardias seguidas, sanguchito, finde seguido, caer en la semana de quirófano propia (salvo el viernes) o ser un sábado /
+ * guardias seguidas, sanguchito, finde seguido o ser un sábado /
  * domingo / feriado de más para quien ya tiene más que el promedio. Solo aparecen las fechas con algún motivo.
  */
 export function shiftProblems(
@@ -448,13 +431,6 @@ export function shiftProblems(
     }
   }
 
-  for (const [week, id] of Object.entries(quirofano)) {
-    if (!counts[id] || !inWindow(shiftWeek(week, 6), settings)) continue
-    for (const offset of QUIROFANO_AVOID_OFFSETS) {
-      const date = shiftWeek(week, offset)
-      if (shifts[date] === id) add(date, 'En su semana de quirófano (lo ideal es el viernes)')
-    }
-  }
   return problems
 }
 
@@ -472,8 +448,8 @@ export type Candidate = {
   weekend: { alreadyBusy: boolean; streaks: number } | null
   /** Sanguchitos (guardia, libre, guardia) que se armarían al asignarle este día */
   newSandwich: number
-  /** 'avoid': cae en su semana de quirófano (menos el viernes). 'prefer': la semana anterior, el domingo previo o su viernes. */
-  around: 'prefer' | 'avoid' | null
+  /** 'prefer': la semana anterior a su quirófano, el domingo previo o su viernes. */
+  around: 'prefer' | null
   /** Cómo queda el reparto completo si se le asigna este día */
   score: Score
 }
@@ -495,7 +471,6 @@ function gapsAround(date: string, shifts: Shifts, personId: string) {
 /** ¿Asignarle este día le genera alguno de los problemas que se avisan con badges amarillos? */
 export const hasIssue = (c: Candidate) =>
   c.newSandwich > 0 ||
-  c.around === 'avoid' ||
   c.gaps.before === 1 ||
   c.gaps.after === 1 ||
   (c.weekend?.streaks ?? 0) > 0
@@ -503,7 +478,7 @@ export const hasIssue = (c: Candidate) =>
 /**
  * Ordena las personas activas de mejor a peor candidata para tomar la guardia de `date`: gana quien deja el
  * mejor reparto en total (ver `Score`), que es exactamente lo que mide la tabla de justicia. Los datos de
- * `Candidate` (guardia ayer, sanguchito, finde seguido, quirófano) son solo la explicación que se muestra.
+ * `Candidate` (guardia ayer, sanguchito, finde seguido, cerca del quirófano) son solo la explicación que se muestra.
  */
 export function rankCandidates(
   date: string,
@@ -539,7 +514,7 @@ export function rankCandidates(
       // Alrededor del quirófano (la semana empieza el lunes y el domingo cierra la anterior)
       const day = dayOfWeek(date)
       let around: Candidate['around'] = null
-      if (quirofano[week] === person.id) around = day === 5 ? 'prefer' : 'avoid'
+      if (quirofano[week] === person.id) around = day === 5 ? 'prefer' : null
       else if (quirofano[shiftWeek(week, 7)] === person.id && day !== 6) around = 'prefer'
 
       const score = scoreShifts(people, { ...withoutDate, [date]: person.id }, quirofano, settings, holiday)

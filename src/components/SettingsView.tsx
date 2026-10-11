@@ -203,7 +203,7 @@ function QuirofanoCard() {
       )}
       <p className="text-xs text-base-content/60">
         Alrededor de su semana de quirófano, a cada persona se le prefiere dar guardia de lunes a viernes de la semana anterior,
-        el domingo previo y el viernes de su semana, y se evitan el resto de los días de su semana.
+        el domingo previo y el viernes de su semana.
       </p>
     </Card>
   )

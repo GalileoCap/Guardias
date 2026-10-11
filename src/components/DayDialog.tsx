@@ -89,7 +89,6 @@ export default function DayDialog({ date, onClose }: { date: string; onClose: ()
                       <span className="badge badge-warning badge-sm">{c.gaps.before === 1 ? 'guardia ayer' : 'guardia mañana'}</span>
                     )}
                     {c.newSandwich > 0 && <span className="badge badge-warning badge-sm">sanguchito</span>}
-                    {c.around === 'avoid' && <span className="badge badge-warning badge-sm">en su semana de quirófano</span>}
                     {c.around === 'prefer' && <span className="badge badge-info badge-soft badge-sm">cerca de su quirófano</span>}
                     {c.weekend && c.weekend.streaks > 0 && (
                       <span className="badge badge-warning badge-sm">

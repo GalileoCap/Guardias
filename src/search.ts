@@ -1,7 +1,6 @@
 import { addDaysTo, dayOfWeek, mondayOf, toDay } from './dates'
 import {
   PRE_QUIROFANO_BONUS,
-  QUIROFANO_AVOID_OFFSETS,
   QUIROFANO_PREFER_OFFSETS,
   SPACING_CAP_DAYS,
   categoriesOf,
@@ -29,18 +28,17 @@ const BUSY_WEEKENDS = 4
 const CONSECUTIVE = 5
 const BACK_TO_BACK = 6
 const SANDWICH = 7
-const IN_QUIROFANO = 8
-const PRE = 9
-const SPACING = 10
-const BUSY_LONG = 11
-const ROW = 12
+const PRE = 8
+const SPACING = 9
+const BUSY_LONG = 10
+const ROW = 11
 // Columnas de reparto parejo; las primeras cuatro (total, sábado, domingo, feriado) son las primeras de la fila
 const SHARE_COLUMNS = 6
 
 // Puntaje como números para comparar rápido: las cosas malas (en el orden de BAD_CATEGORIES), el reparto + premio, y el espaciado
-const SCORE_SIZE = 6
-const FAIR_AT = 4
-const SPACING_AT = 5
+const SCORE_SIZE = 5
+const FAIR_AT = 3
+const SPACING_AT = 4
 
 /** Igual que `compareScores(a, b) > 0` */
 function better(a: Float64Array, b: Float64Array) {
@@ -138,16 +136,11 @@ export function createSearch(
   const blockSeen = new Int32Array(longWeekends)
   let tick = 0
 
-  // Cuántas veces cada casillero cuenta, para cada persona, alrededor de su quirófano (índice: persona * N + casillero)
-  const avoid = new Uint8Array(P * N)
+  // Cuántas veces cada casillero cuenta, para cada persona, como bien ubicado alrededor de su quirófano (índice: persona * N + casillero)
   const prefer = new Uint8Array(P * N)
   for (const [w, id] of Object.entries(quirofano)) {
     const p = personIndex.get(id)
     if (p === undefined || !inWindow(addDaysTo(w, 6), settings)) continue
-    for (const offset of QUIROFANO_AVOID_OFFSETS) {
-      const s = slotOfDay.get(toDay(addDaysTo(w, offset)))
-      if (s !== undefined) avoid[p * N + s]++
-    }
     for (const offset of QUIROFANO_PREFER_OFFSETS) {
       if (offset < 0 && quirofano[addDaysTo(w, -7)] === id) continue
       const date = addDaysTo(w, offset)
@@ -167,14 +160,12 @@ export function createSearch(
     let minGap = SPACING_CAP_DAYS
     let lastDay = -1
     let lastBusyWeek = -2
-    let inQuirofano = 0
     let pre = 0
     let busyLong = 0
     tick++
     const from = p * N
     for (let s = 0; s < N; s++) {
       if (owner[s] !== p) continue
-      inQuirofano += avoid[from + s]
       if (!inside[s]) continue
       pre += prefer[from + s]
       total++
@@ -208,7 +199,6 @@ export function createSearch(
     rows[at + CONSECUTIVE] = consecutive
     rows[at + BACK_TO_BACK] = backToBack
     rows[at + SANDWICH] = sandwich
-    rows[at + IN_QUIROFANO] = inQuirofano
     rows[at + PRE] = pre
     rows[at + SPACING] = minGap
     rows[at + BUSY_LONG] = busyLong
@@ -220,14 +210,13 @@ export function createSearch(
   const values = new Float64Array(P)
   /** Puntaje del reparto actual (ver `categoryScores` y `scoreOf` de fairness.ts) */
   function evaluate(out: Float64Array) {
-    let backToBack = 0, sandwich = 0, consecutive = 0, inQuirofano = 0, pre = 0, spacing = 0
+    let backToBack = 0, sandwich = 0, consecutive = 0, pre = 0, spacing = 0
     let anyWeekendWork = false
     for (let p = 0; p < P; p++) {
       const at = p * ROW
       backToBack += rows[at + BACK_TO_BACK]
       sandwich += rows[at + SANDWICH]
       consecutive += rows[at + CONSECUTIVE]
-      inQuirofano += rows[at + IN_QUIROFANO]
       pre += rows[at + PRE]
       spacing += rows[at + SPACING]
       if (rows[at + BUSY_WEEKENDS] > 0) anyWeekendWork = true
@@ -256,7 +245,6 @@ export function createSearch(
     out[0] = backToBack
     out[1] = sandwich
     out[2] = consecutive
-    out[3] = inQuirofano
     out[FAIR_AT] = (count ? shares / count : 1) + PRE_QUIROFANO_BONUS * pre
     out[SPACING_AT] = spacing
   }
