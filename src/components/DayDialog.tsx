@@ -96,7 +96,6 @@ export default function DayDialog({ date, onClose }: { date: string; onClose: ()
                         {c.weekend.streaks === 2 ? 'finde entre dos suyos' : 'finde seguido'}
                       </span>
                     )}
-                    {c.weekend?.alreadyBusy && <span className="badge badge-info badge-soft badge-sm">ya trabaja este finde</span>}
                   </span>
                   <span className="text-xs opacity-70">
                     {[

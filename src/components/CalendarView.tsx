@@ -6,9 +6,10 @@ import interactionPlugin from '@fullcalendar/interaction'
 import FullCalendar from '@fullcalendar/react'
 import { useCallback, useMemo, useRef, useState } from 'react'
 import { addDaysTo, isoOf, mondayOf } from '../dates'
-import { hasIssue, rankCandidates, suggestAssignments } from '../fairness'
+import { hasIssue, rankCandidates, scoreShifts, suggestAssignments } from '../fairness'
 import { contrastText, useHolidayLookup, useProblems, useQuirofano } from '../hooks'
 import { useStore } from '../store'
+import ApplyDialog, { type Reshuffle } from './ApplyDialog'
 import DayDialog from './DayDialog'
 import Icon from './Icon'
 import QuirofanoDialog from './QuirofanoDialog'
@@ -81,11 +82,11 @@ export default function CalendarView({
 
   // Recomendaciones de guardias siempre a la vista: las sin asignar, de las más pesadas a las más livianas, acomodadas
   // alrededor del quirófano de cada semana. Se recalculan solas con cada cambio.
+  const unassignedDates = useMemo(() => Object.entries(shifts).filter(([, p]) => p === null).map(([d]) => d), [shifts])
   const suggestions = useMemo(() => {
     if (!showSuggestions) return {}
-    const unassigned = Object.entries(shifts).filter(([, p]) => p === null).map(([d]) => d)
-    return suggestAssignments(unassigned, people, shifts, quirofano, settings, holiday)
-  }, [showSuggestions, shifts, people, quirofano, settings, holiday])
+    return suggestAssignments(unassignedDates, people, shifts, quirofano, settings, holiday)
+  }, [showSuggestions, unassignedDates, shifts, people, quirofano, settings, holiday])
 
   // Lo que aplica el botón: las recomendaciones del mes que se está viendo
   const inMonth = useMemo(
@@ -93,7 +94,32 @@ export default function CalendarView({
     [suggestions, range],
   )
   const applicableCount = Object.keys(inMonth).length
-  const applySuggestions = () => setShifts(inMonth)
+  const [reshuffle, setReshuffle] = useState<Reshuffle | null>(null)
+  const inVisibleMonth = (date: string) => !!range && date >= range.start && date < range.end
+
+  // Completa las sin asignar. Si reacomodando también las ya cargadas (de hoy en adelante) el mes mejora, antes pregunta.
+  const applySuggestions = () => {
+    const today = iso(new Date())
+    const movable = Object.entries(shifts)
+      .filter(([date, personId]) => personId && date >= today && inVisibleMonth(date))
+      .map(([date]) => date)
+    const full = suggestAssignments(unassignedDates, people, shifts, quirofano, settings, holiday, movable)
+    const changes = movable
+      .filter((date) => full[date] && full[date] !== shifts[date])
+      .map((date) => ({ date, from: peopleById.get(shifts[date]!)!, to: peopleById.get(full[date])! }))
+    if (changes.length === 0) return setShifts(inMonth)
+    const reshuffleInMonth = Object.fromEntries(Object.entries(full).filter(([date]) => inVisibleMonth(date)))
+    const score = (assignments: Record<string, string | null>) =>
+      scoreShifts(people, { ...shifts, ...assignments }, quirofano, settings, holiday)
+    setReshuffle({
+      changes,
+      fillOnly: inMonth,
+      reshuffle: reshuffleInMonth,
+      before: score({}),
+      afterFill: score(inMonth),
+      afterReshuffle: score(reshuffleInMonth),
+    })
+  }
 
   const events = useMemo<EventInput[]>(() => {
     const emphasis = (personId: string | null | undefined) =>
@@ -294,6 +320,20 @@ export default function CalendarView({
       </div>
 
       {openDate && <DayDialog date={openDate} onClose={() => setOpenDate(null)} />}
+      {reshuffle && (
+        <ApplyDialog
+          data={reshuffle}
+          onClose={() => setReshuffle(null)}
+          onFillOnly={() => {
+            setShifts(reshuffle.fillOnly)
+            setReshuffle(null)
+          }}
+          onReshuffle={() => {
+            setShifts(reshuffle.reshuffle)
+            setReshuffle(null)
+          }}
+        />
+      )}
       {openWeek && settings.quirofanoEnabled && <QuirofanoDialog week={openWeek} onClose={() => setOpenWeek(null)} />}
     </div>
   )

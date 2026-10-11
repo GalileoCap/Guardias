@@ -7,6 +7,7 @@ export type Category =
   | ShiftCategory
   | 'freeWeekends'
   | 'consecutive'
+  | 'backToBack'
   | 'sandwich'
   | 'inQuirofano'
   | 'freeLongWeekends'
@@ -33,8 +34,14 @@ export const CATEGORIES: {
   {
     key: 'consecutive',
     label: 'Findes seguidos',
-    short: 'Seguidos',
+    short: 'Findes seg.',
     hint: 'Veces que trabajó un finde justo después de haber trabajado el anterior',
+  },
+  {
+    key: 'backToBack',
+    label: 'Guardias seguidas',
+    short: 'Seguidas',
+    hint: 'Veces que tuvo guardia dos días corridos',
   },
   {
     key: 'sandwich',
@@ -57,6 +64,13 @@ export const CATEGORIES: {
   },
 ]
 
+/**
+ * Las "cosas malas": lo ideal es que no haya ninguna, así que se miden por cantidad (no por reparto parejo: una sola,
+ * aunque sea de una persona, ya es peor que ninguna). En este orden de prioridad, de peor a menos grave.
+ */
+export const BAD_CATEGORIES: Category[] = ['backToBack', 'sandwich', 'consecutive', 'inQuirofano']
+const isBad = (key: Category) => BAD_CATEGORIES.includes(key)
+
 /** Lunes de la semana de `date` ('YYYY-MM-DD'), que es la clave de `quirofano` y de cada finde. */
 export const weekOf = mondayOf
 
@@ -75,6 +89,8 @@ export type Counts = Record<Category, number> & {
   /** Findes largos con guardias cargadas (el mismo número para todos) */
   longWeekends: number
   quirofano: number
+  /** Guardias que tuvo en un buen lugar alrededor de su quirófano (ver `PRE_QUIROFANO_OFFSETS`): es algo bueno */
+  preQuirofano: number
   /** Menor cantidad de días entre dos guardias suyas (null si tiene menos de dos) */
   minGap: number | null
 }
@@ -84,8 +100,10 @@ const emptyCounts = (): Counts => ({
   sunday: 0,
   holiday: 0,
   quirofano: 0,
+  preQuirofano: 0,
   freeWeekends: 0,
   consecutive: 0,
+  backToBack: 0,
   sandwich: 0,
   inQuirofano: 0,
   freeLongWeekends: 0,
@@ -110,6 +128,12 @@ function inWindow(date: string, settings: Settings) {
 
 /** Días de su semana de quirófano (desde el lunes) en los que no conviene tener guardia: lunes a jueves, sábado y domingo. */
 const QUIROFANO_AVOID_OFFSETS = [0, 1, 2, 3, 5, 6]
+
+/**
+ * Días (desde el lunes de su semana de quirófano) en los que sí conviene tener guardia: su viernes, de lunes a viernes
+ * de la semana anterior y el domingo previo. El sábado anterior no.
+ */
+const QUIROFANO_PREFER_OFFSETS = [4, -7, -6, -5, -4, -3, -1]
 
 /** ¿Tiene guardia el sábado o el domingo de la semana `week` (lunes)? */
 const busyOn = (shifts: Shifts, week: string, personId: string) =>
@@ -164,6 +188,7 @@ function countShifts(
     own.sort()
     for (let i = 1; i < own.length; i++) {
       const gap = daysBetween(own[i], own[i - 1])
+      if (gap === 1) counts[id].backToBack++
       if (gap === 2) counts[id].sandwich++
       counts[id].minGap = counts[id].minGap === null ? gap : Math.min(counts[id].minGap, gap)
     }
@@ -208,6 +233,12 @@ function countShifts(
     for (const offset of QUIROFANO_AVOID_OFFSETS) {
       if (shifts[shiftWeek(week, offset)] === personId) counts[personId].inQuirofano++
     }
+    for (const offset of QUIROFANO_PREFER_OFFSETS) {
+      // la semana anterior es "pre" solo si no es también de quirófano suya
+      if (offset < 0 && quirofano[shiftWeek(week, -7)] === personId) continue
+      const date = shiftWeek(week, offset)
+      if (shifts[date] === personId && inWindow(date, settings)) counts[personId].preQuirofano++
+    }
   }
   return counts
 }
@@ -249,8 +280,11 @@ export type Fairness = {
   burden: Record<string, Burden>
 }
 
-export function computeFairness(counts: Record<string, Counts>): Fairness {
-  const rows = Object.values(counts)
+/**
+ * Puntaje (0..1) de cada columna y promedio de cada una. Las columnas "de reparto" miden qué tan parejo está (ver
+ * `evenness`); las "cosas malas" (`BAD_CATEGORIES`) miden cuántas hay: 1 = ninguna, 0 = una por persona o más.
+ */
+function categoryScores(rows: Counts[]) {
   const perCategory = {} as Record<Category, number | null>
   const means = emptyCounts()
   const anyWeekendWork = rows.some((r) => r.busyWeekends > 0)
@@ -259,11 +293,11 @@ export function computeFairness(counts: Record<string, Counts>): Fairness {
   const anyLongWeekend = rows.some((r) => r.longWeekends > 0)
   for (const { key } of CATEGORIES) {
     const values = rows.map((r) => r[key])
-    means[key] = values.length ? values.reduce((a, b) => a + b, 0) / values.length : 0
-    perCategory[key] = evenness(values)
+    const sum = values.reduce((a, b) => a + b, 0)
+    means[key] = values.length ? sum / values.length : 0
     // Todos en 0 "seguidos" / "sanguchito" (o todos ocupados en todos los findes) es un reparto perfecto, no "sin datos".
     const hasData =
-      key === 'sandwich'
+      key === 'sandwich' || key === 'backToBack'
         ? anyWork
         : key === 'inQuirofano'
           ? anyQuirofano
@@ -272,8 +306,19 @@ export function computeFairness(counts: Record<string, Counts>): Fairness {
             : key === 'consecutive' || key === 'freeWeekends'
               ? anyWeekendWork
               : false
+    if (isBad(key)) {
+      perCategory[key] = hasData && values.length ? 1 - Math.min(1, sum / values.length) : null
+      continue
+    }
+    perCategory[key] = evenness(values)
     if (perCategory[key] === null && rows.length > 1 && hasData) perCategory[key] = 1
   }
+  return { perCategory, means }
+}
+
+export function computeFairness(counts: Record<string, Counts>): Fairness {
+  const rows = Object.values(counts)
+  const { perCategory, means } = categoryScores(rows)
   const scores = Object.values(perCategory).filter((v): v is number => v !== null)
   const overall = scores.length ? scores.reduce((a, b) => a + b, 0) / scores.length : null
 
@@ -286,7 +331,8 @@ export function computeFairness(counts: Record<string, Counts>): Fairness {
     for (const { key, worse } of CATEGORIES) {
       const scale = Math.max(means[key], 1)
       parts[key] = Math.max(-1, Math.min(1, ((worse === 'low' ? -1 : 1) * (c[key] - means[key])) / scale))
-      const gap = Math.max(0, Math.floor(means[key] + 1e-9) - c[key], c[key] - Math.ceil(means[key] - 1e-9))
+      // en las cosas malas no hay "piso o techo del promedio" que valga: cada una cuenta
+      const gap = isBad(key) ? c[key] : Math.max(0, Math.floor(means[key] + 1e-9) - c[key], c[key] - Math.ceil(means[key] - 1e-9))
       off[key] = Math.min(1, gap / scale)
     }
     const avg = (m: Record<Category, number>) =>
@@ -297,12 +343,56 @@ export function computeFairness(counts: Record<string, Counts>): Fairness {
 }
 
 // ---------------------------------------------------------------------------
+// Puntaje de un reparto (lo que se maximiza al recomendar)
+// ---------------------------------------------------------------------------
+
+/**
+ * Un reparto es mejor que otro si, en este orden: tiene menos guardias seguidas, menos sanguchitos, menos findes
+ * seguidos y menos guardias en la semana de quirófano (`bad`, en el orden de `BAD_CATEGORIES`); y si empatan, si está
+ * más parejo en las columnas de reparto (`fair`) sumando un premio por cada guardia bien ubicada alrededor del
+ * quirófano (`pre`); y si siguen empatados, si las guardias de cada persona quedan más separadas (`spacing`).
+ */
+export type Score = { bad: number[]; fair: number; pre: number; spacing: number }
+
+/** Cuánto vale cada guardia bien ubicada alrededor del quirófano, en puntos de "qué tan parejo" (0..1) */
+const PRE_QUIROFANO_BONUS = 0.03
+/** El espaciado entre guardias no suma más allá de estos días */
+const SPACING_CAP_DAYS = 14
+
+export function scoreOf(counts: Record<string, Counts>): Score {
+  const rows = Object.values(counts)
+  const { perCategory } = categoryScores(rows)
+  const shares = CATEGORIES.filter((c) => !isBad(c.key))
+    .map((c) => perCategory[c.key])
+    .filter((v): v is number => v !== null)
+  return {
+    bad: BAD_CATEGORIES.map((key) => rows.reduce((sum, r) => sum + r[key], 0)),
+    fair: shares.length ? shares.reduce((a, b) => a + b, 0) / shares.length : 1,
+    pre: rows.reduce((sum, r) => sum + r.preQuirofano, 0),
+    spacing: rows.reduce((sum, r) => sum + Math.min(r.minGap ?? SPACING_CAP_DAYS, SPACING_CAP_DAYS), 0),
+  }
+}
+
+/** > 0 si `a` es un mejor reparto que `b`, < 0 si es peor, 0 si empatan. */
+export function compareScores(a: Score, b: Score): number {
+  for (let i = 0; i < a.bad.length; i++) if (a.bad[i] !== b.bad[i]) return b.bad[i] - a.bad[i]
+  const fair = a.fair + PRE_QUIROFANO_BONUS * a.pre - (b.fair + PRE_QUIROFANO_BONUS * b.pre)
+  if (Math.abs(fair) > 1e-9) return fair
+  return a.spacing - b.spacing
+}
+
+/** Puntaje de un reparto completo. */
+export function scoreShifts(people: Person[], shifts: Shifts, quirofano: Quirofano, settings: Settings, holiday: HolidayLookup): Score {
+  return scoreOf(countShifts(people, shifts, quirofano, settings, holiday))
+}
+
+// ---------------------------------------------------------------------------
 // Guardias que perjudican
 // ---------------------------------------------------------------------------
 
 /**
  * Para cada guardia asignada, los motivos por los que empeora la justicia (ver las columnas de la tabla):
- * sanguchito, finde seguido, caer en la semana de quirófano propia (salvo el viernes) o ser un sábado /
+ * guardias seguidas, sanguchito, finde seguido, caer en la semana de quirófano propia (salvo el viernes) o ser un sábado /
  * domingo / feriado de más para quien ya tiene más que el promedio. Solo aparecen las fechas con algún motivo.
  */
 export function shiftProblems(
@@ -338,7 +428,12 @@ export function shiftProblems(
   for (const dates of Object.values(own)) {
     dates.sort()
     for (let i = 1; i < dates.length; i++) {
-      if (daysBetween(dates[i], dates[i - 1]) === 2) {
+      const gap = daysBetween(dates[i], dates[i - 1])
+      if (gap === 1) {
+        add(dates[i - 1], `Guardias seguidas: también tiene la del ${dm(dates[i])}`)
+        add(dates[i], `Guardias seguidas: también tiene la del ${dm(dates[i - 1])}`)
+      }
+      if (gap === 2) {
         add(dates[i - 1], `Sanguchito con la guardia del ${dm(dates[i])}`)
         add(dates[i], `Sanguchito con la guardia del ${dm(dates[i - 1])}`)
       }
@@ -369,6 +464,7 @@ export function shiftProblems(
 
 export type Candidate = {
   person: Person
+  /** Cuánto lleva cada categoría sin contar esta fecha */
   counts: Counts
   /** Días hasta la guardia suya anterior / siguiente más cercana (null si no tiene) */
   gaps: { before: number | null; after: number | null }
@@ -378,15 +474,9 @@ export type Candidate = {
   newSandwich: number
   /** 'avoid': cae en su semana de quirófano (menos el viernes). 'prefer': la semana anterior, el domingo previo o su viernes. */
   around: 'prefer' | 'avoid' | null
-  cost: number
+  /** Cómo queda el reparto completo si se le asigna este día */
+  score: Score
 }
-
-const AROUND_AVOID_PENALTY = 2
-const AROUND_PREFER_BONUS = 0.75
-const SANDWICH_PENALTY = 1.5
-const ADJACENT_PENALTY = 1.5
-/** Hasta cuántos días de distancia a su guardia más cercana premia el desempate */
-const SPACING_BONUS_DAYS = 14
 
 /** Días hasta la guardia anterior y la siguiente de `personId` respecto de `date`. */
 function gapsAround(date: string, shifts: Shifts, personId: string) {
@@ -411,15 +501,9 @@ export const hasIssue = (c: Candidate) =>
   (c.weekend?.streaks ?? 0) > 0
 
 /**
- * Ordena las personas activas de mejor a peor candidata para tomar la guardia de `date`.
- *
- * Asignar un día a la persona i sube la desigualdad en proporción a lo que ya tiene en cada categoría
- * que aplica a ese día (total, sábado/domingo, feriado): gana quien menos tiene. En sábado/domingo se
- * suma además, si le estrena un finde, lo que ya lleva de findes ocupados y de findes seguidos (más
- * por cada finde seguido que se arma). Lo mismo con los sanguchitos que se armarían. Las guardias en días
- * consecutivos tienen una penalización fija. Alrededor del quirófano de la persona: se prefiere lunes a viernes
- * de la semana anterior, el domingo previo y su viernes; se evita el resto de su semana. Y entre dos
- * parecidas gana quien tiene su guardia más cercana más lejos.
+ * Ordena las personas activas de mejor a peor candidata para tomar la guardia de `date`: gana quien deja el
+ * mejor reparto en total (ver `Score`), que es exactamente lo que mide la tabla de justicia. Los datos de
+ * `Candidate` (guardia ayer, sanguchito, finde seguido, quirófano) son solo la explicación que se muestra.
  */
 export function rankCandidates(
   date: string,
@@ -432,7 +516,6 @@ export function rankCandidates(
   const withoutDate = { ...shifts }
   delete withoutDate[date]
   const counts = countShifts(people, withoutDate, quirofano, settings, holiday)
-  const cats = categoriesOf(date, holiday)
   const week = weekOf(date)
   return people
     .filter((p) => p.active)
@@ -441,55 +524,40 @@ export function rankCandidates(
       const gaps = gapsAround(date, withoutDate, person.id)
 
       let weekend: Candidate['weekend'] = null
-      let weekendCost = 0
       if (isWeekendDay(date)) {
         const alreadyBusy = busyOn(withoutDate, week, person.id)
         const streaks = alreadyBusy
           ? 0
           : Number(busyOn(withoutDate, shiftWeek(week, -7), person.id)) + Number(busyOn(withoutDate, shiftWeek(week, 7), person.id))
         weekend = { alreadyBusy, streaks }
-        if (!alreadyBusy) weekendCost = c.busyWeekends + streaks * (1 + c.consecutive)
       }
 
       // sanguchitos que aparecen (antes-hoy, hoy-después) menos el (antes-después) que se parte en dos
       const { before, after } = gaps
       const newSandwich = Math.max(0, Number(before === 2) + Number(after === 2) - Number(before === 1 && after === 1))
-      const backToBack = before === 1 || after === 1
 
       // Alrededor del quirófano (la semana empieza el lunes y el domingo cierra la anterior)
       const day = dayOfWeek(date)
       let around: Candidate['around'] = null
-      let aroundCost = 0
-      if (quirofano[week] === person.id) {
-        if (day === 5) {
-          around = 'prefer'
-          aroundCost = -AROUND_PREFER_BONUS
-        } else {
-          around = 'avoid'
-          aroundCost = AROUND_AVOID_PENALTY + c.inQuirofano
-        }
-      } else if (quirofano[shiftWeek(week, 7)] === person.id && day !== 6) {
-        around = 'prefer'
-        aroundCost = -AROUND_PREFER_BONUS
-      }
+      if (quirofano[week] === person.id) around = day === 5 ? 'prefer' : 'avoid'
+      else if (quirofano[shiftWeek(week, 7)] === person.id && day !== 6) around = 'prefer'
 
-      const nearest = Math.min(before ?? Infinity, after ?? Infinity, SPACING_BONUS_DAYS)
-      const cost =
-        cats.reduce((sum, k) => sum + c[k], 0) +
-        weekendCost +
-        aroundCost +
-        newSandwich * (SANDWICH_PENALTY + c.sandwich) +
-        (backToBack ? ADJACENT_PENALTY : 0) -
-        nearest / (2 * SPACING_BONUS_DAYS)
-      return { person, counts: c, gaps, weekend, newSandwich, around, cost }
+      const score = scoreShifts(people, { ...withoutDate, [date]: person.id }, quirofano, settings, holiday)
+      return { person, counts: c, gaps, weekend, newSandwich, around, score }
     })
-    .sort((a, b) => a.cost - b.cost)
+    .sort((a, b) => compareScores(b.score, a.score))
 }
+
+/** Cuántas veces se revisan todas las guardias buscando un cambio que mejore el reparto */
+const MAX_IMPROVE_PASSES = 4
 
 /**
  * Propone asignaciones para las guardias sin asignar de `dates`.
  * Primero los días más "pesados" (fin de semana / feriado), después los comunes, y en cada paso
- * elige a la mejor candidata teniendo en cuenta lo ya propuesto.
+ * elige a la mejor candidata teniendo en cuenta lo ya propuesto. Después revisa de a una cada guardia
+ * propuesta (y las de `movable`, ya cargadas, que también se pueden reacomodar) probando a las demás personas,
+ * y se queda con cada cambio que mejora el reparto completo. Devuelve lo propuesto para `dates` y, de `movable`,
+ * solo lo que cambia.
  */
 export function suggestAssignments(
   dates: string[],
@@ -498,6 +566,7 @@ export function suggestAssignments(
   quirofano: Quirofano,
   settings: Settings,
   holiday: HolidayLookup,
+  movable: string[] = [],
 ): Record<string, string> {
   const working: Shifts = { ...shifts }
   const result: Record<string, string> = {}
@@ -510,6 +579,32 @@ export function suggestAssignments(
     working[date] = best.person.id
     result[date] = best.person.id
   }
+
+  const active = people.filter((p) => p.active)
+  const free = [...ordered, ...movable.filter((d) => working[d])]
+  if (active.length > 1 && free.length > 0) {
+    let best = scoreShifts(people, working, quirofano, settings, holiday)
+    for (let pass = 0; pass < MAX_IMPROVE_PASSES; pass++) {
+      let improved = false
+      for (const date of free) {
+        const keep = working[date]
+        let bestId = keep
+        for (const p of active) {
+          if (p.id === keep) continue
+          working[date] = p.id
+          const score = scoreShifts(people, working, quirofano, settings, holiday)
+          if (compareScores(score, best) > 0) {
+            best = score
+            bestId = p.id
+            improved = true
+          }
+        }
+        working[date] = bestId
+      }
+      if (!improved) break
+    }
+  }
+  for (const date of free) if (working[date] && (dates.includes(date) || working[date] !== shifts[date])) result[date] = working[date]!
   return result
 }
 
@@ -526,6 +621,9 @@ export type QuirofanoCandidate = {
   expected: boolean
   cost: number
 }
+
+/** Costo de repetir quirofanero dos semanas seguidas, en semanas de quirófano de diferencia */
+const ADJACENT_PENALTY = 1.5
 
 /** Rotación efectiva: el orden configurado (solo gente activa); si no hay ninguno, todas las activas en el orden de la lista. */
 export function rotationOrder(people: Person[], settings: Settings): string[] {
