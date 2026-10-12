@@ -1,6 +1,7 @@
 {
   "version": "0.0.1",
   "configurations": [
-    { "name": "guardias", "runtimeExecutable": "npm", "runtimeArgs": ["run", "dev", "--", "--port", "3001"], "port": 3001 }
+    { "name": "guardias", "runtimeExecutable": "npm", "runtimeArgs": ["run", "dev", "--", "--port", "3001"], "port": 3001 },
+    { "name": "guardias-dist", "runtimeExecutable": "npm", "runtimeArgs": ["run", "preview", "--", "--port", "3004", "--strictPort"], "port": 3004 }
   ]
 }

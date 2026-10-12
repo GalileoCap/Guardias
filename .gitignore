@@ -4,3 +4,4 @@ data
 .data
 server/shared.js
 backups/
+CLAUDE.local.md

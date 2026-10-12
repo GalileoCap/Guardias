@@ -6,8 +6,8 @@ Memoria en reposo: ~50 MB (un Node vacío ya usa ~33). No hay base de datos ni p
 ## Cómo se comparte
 
 - Sin `?group=` la app funciona como antes: todo en `localStorage`, sin servidor.
-- **Configuración → Datos → Compartir…** crea un grupo con los datos actuales y pasa a `?group=<id>`. El id (128 bits al azar) es el secreto: quien tenga el enlace edita.
-- Cada cambio se manda como parche por clave (día, persona, ajuste) ~0,7 s después de editar, y el servidor lo fusiona con lo que haya. Dos personas editando días distintos no se pisan; el mismo día gana el último.
+- En Configuración → Datos → Compartir… se crea un grupo con los datos actuales y pasa a `?group=<id>`. El id (128 bits al azar) es el secreto: quien tenga el enlace edita.
+- Cada cambio se manda como parche por clave (día, persona, ajuste) ~0,7 s después de editar, y el servidor lo fusiona con lo que haya. Dos personas editando días distintos no se pisan. En el mismo día gana el último.
 - Cada pestaña consulta cada 15 s si hay revisión nueva (responde 304, casi gratis) y al volver a primer plano.
 - Sin conexión los cambios quedan en el navegador y salen solos al volver.
 
@@ -17,7 +17,7 @@ Memoria en reposo: ~50 MB (un Node vacío ya usa ~33). No hay base de datos ni p
 docker compose up -d --build
 ```
 
-Escucha en `127.0.0.1:3000` con tope de 64 MB y 0,25 CPU; los datos van al volumen `guardias-data`. Ponelo detrás del proxy que ya tengas (HTTPS lo resuelve el proxy). Ejemplo en Caddy:
+Escucha en `127.0.0.1:3000` con tope de 64 MB y 0,25 CPU. Los datos van al volumen `guardias-data`. Ponelo detrás del proxy que ya tengas (HTTPS lo resuelve el proxy). Ejemplo en Caddy:
 
 ```
 guardias.ejemplo.com {
@@ -46,7 +46,7 @@ HOST=127.0.0.1 PORT=3000 DATA_DIR=/var/lib/guardias node --max-old-space-size=40
 | `HOST` | 127.0.0.1 | en Docker es 0.0.0.0 |
 | `DATA_DIR` | `./data` | un `<id>.json` por grupo |
 | `DIST_DIR` | `./dist` | |
-| `MAX_GROUPS` | 200 | tope de grupos; evita que alguien llene el disco |
+| `MAX_GROUPS` | 200 | tope de grupos, para que nadie llene el disco |
 
 ## Respaldo
 
