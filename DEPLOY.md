@@ -8,7 +8,7 @@ Memoria en reposo: ~50 MB (un Node vacío ya usa ~33). No hay base de datos ni p
 - Sin `?group=` la app funciona como antes: todo en `localStorage`, sin servidor.
 - En Configuración → Datos → Compartir… se crea un grupo con los datos actuales y pasa a `?group=<id>`. El id (128 bits al azar) es el secreto: quien tenga el enlace edita.
 - Cada cambio se manda como parche por clave (día, persona, ajuste) ~0,7 s después de editar, y el servidor lo fusiona con lo que haya. Dos personas editando días distintos no se pisan. En el mismo día gana el último.
-- Cada pestaña consulta cada 15 s si hay revisión nueva (responde 304, casi gratis) y al volver a primer plano.
+- Cada pestaña consulta cada minuto, si está visible, si hay revisión nueva (responde 304, casi gratis) y al volver a primer plano.
 - Sin conexión los cambios quedan en el navegador y salen solos al volver.
 
 ## Con Docker

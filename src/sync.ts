@@ -17,7 +17,7 @@ export const useSyncStatus = create<{ status: SyncStatus }>(() => ({ status: 'lo
 const setStatus = (status: SyncStatus) => useSyncStatus.setState({ status })
 
 const API = `${import.meta.env.BASE_URL}api/g`
-const POLL_MS = 15_000
+const POLL_MS = 60_000
 const PUSH_DELAY_MS = 700
 
 const snap = (): AppData => {
