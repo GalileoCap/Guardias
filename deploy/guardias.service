@@ -1,0 +1,12 @@
+[Unit]
+Description=Guardias, servidor de grupos y frontend
+Requires=guardias.socket
+After=guardias.socket
+
+[Service]
+# El proceso recibe el socket de systemd y sale solo tras IDLE_MS sin pedidos (5 min). Sin Restart: el socket lo vuelve a levantar.
+WorkingDirectory=%h/apps/guardias/myproject
+Environment=DATA_DIR=%h/apps/guardias/data IDLE_MS=300000
+ExecStart=%h/apps/guardias/env/bin/node --max-old-space-size=40 server/index.mjs
+StandardOutput=append:%h/logs/apps/guardias/console.log
+StandardError=append:%h/logs/apps/guardias/error.log

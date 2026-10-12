@@ -2,7 +2,9 @@
 //   GET  /api/g/:id[?since=N]   -> {rev, data} | 304 si no hay revisión nueva | 404
 //   PUT  /api/g/:id             -> crea el grupo con {data} (409 si ya existe)
 //   POST /api/g/:id/patch       -> aplica {patch} sobre la versión actual y devuelve {rev, data}
-// Variables: PORT (3000), HOST (127.0.0.1), DATA_DIR (./data), DIST_DIR (./dist), MAX_GROUPS (200)
+// Variables: PORT (3000), HOST (127.0.0.1), DATA_DIR (./data), DIST_DIR (./dist), MAX_GROUPS (200),
+//   IDLE_MS (0): si es mayor que 0, el proceso sale solo tras ese tiempo sin pedidos
+// Si systemd entrega el socket (LISTEN_FDS), escucha ahí y se ignoran PORT y HOST.
 import fs from 'node:fs'
 import http from 'node:http'
 import path from 'node:path'
@@ -16,6 +18,7 @@ const HOST = process.env.HOST ?? '127.0.0.1'
 const DATA_DIR = path.resolve(process.env.DATA_DIR ?? path.join(root, 'data'))
 const DIST_DIR = path.resolve(process.env.DIST_DIR ?? path.join(root, 'dist'))
 const MAX_GROUPS = Number(process.env.MAX_GROUPS ?? 200)
+const IDLE_MS = Number(process.env.IDLE_MS ?? 0)
 const MAX_BODY = 512 * 1024
 
 const ID = /^[A-Za-z0-9_-]{16,64}$/
@@ -177,7 +180,21 @@ function serveStatic(req, res, url) {
   pipeline(fs.createReadStream(source), res, () => {})
 }
 
+// ---- apagado por inactividad: con IDLE_MS > 0 el proceso sale solo tras ese tiempo sin pedidos (systemd lo vuelve a levantar) ----
+let idleTimer
+function stop() {
+  server.close(() => process.exit(0))
+  server.closeIdleConnections()
+  setTimeout(() => process.exit(0), 1000).unref()
+}
+function touch() {
+  if (!IDLE_MS) return
+  clearTimeout(idleTimer)
+  idleTimer = setTimeout(stop, IDLE_MS)
+}
+
 const server = http.createServer(async (req, res) => {
+  touch()
   res.setHeader('X-Content-Type-Options', 'nosniff')
   res.setHeader('Referrer-Policy', 'no-referrer') // la URL lleva el id del grupo
   res.setHeader('X-Robots-Tag', 'noindex')
@@ -194,6 +211,13 @@ const server = http.createServer(async (req, res) => {
 server.requestTimeout = 15_000
 server.headersTimeout = 10_000
 server.keepAliveTimeout = 5_000
-server.listen(PORT, HOST, () => console.log(`guardias en http://${HOST}:${PORT} (datos: ${DATA_DIR})`))
+// Con activación por socket, systemd entrega el socket ya abierto como descriptor 3
+const fromSystemd = Number(process.env.LISTEN_FDS) >= 1 && process.env.LISTEN_PID === String(process.pid)
+const listening = () => {
+  touch()
+  console.log(fromSystemd ? `guardias en el socket de systemd (datos: ${DATA_DIR})` : `guardias en http://${HOST}:${PORT} (datos: ${DATA_DIR})`)
+}
+if (fromSystemd) server.listen({ fd: 3 }, listening)
+else server.listen(PORT, HOST, listening)
 
-for (const sig of ['SIGINT', 'SIGTERM']) process.on(sig, () => server.close(() => process.exit(0)))
+for (const sig of ['SIGINT', 'SIGTERM']) process.on(sig, stop)

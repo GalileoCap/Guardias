@@ -9,7 +9,7 @@ export default defineConfig({
   // en desarrollo la API la sirve `npm run dev:server`
   server: { proxy: { '/api': 'http://127.0.0.1:3002' } },
   // cada test tiene que terminar en pocos segundos: uno que no lo logre es un hallazgo, no un tope para subir
-  test: { include: ['src/**/*.test.ts'], testTimeout: 3000, hookTimeout: 3000 },
+  test: { include: ['src/**/*.test.ts', 'server/**/*.test.mjs'], testTimeout: 3000, hookTimeout: 3000 },
   // FullCalendar es la mayor parte del JS: en su propio chunk ninguno pasa los 500 kB que avisa Vite
   build: {
     rolldownOptions: {

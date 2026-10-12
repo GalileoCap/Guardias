@@ -9,6 +9,7 @@
     "build": "tsc --noEmit && vite build && node scripts/precompress.mjs && node --disable-warning=ExperimentalWarning scripts/build-server.mjs",
     "start": "node server/index.mjs",
     "preview": "vite preview",
+    "pretest": "node --disable-warning=ExperimentalWarning scripts/build-server.mjs",
     "test": "vitest run",
     "holidays": "node scripts/build-holidays.mjs"
   },
