@@ -9,6 +9,7 @@
     "build": "tsc --noEmit && vite build && node scripts/precompress.mjs && node --disable-warning=ExperimentalWarning scripts/build-server.mjs",
     "start": "node server/index.mjs",
     "preview": "vite preview",
+    "test": "vitest run",
     "holidays": "node scripts/build-holidays.mjs"
   },
   "dependencies": {
@@ -30,7 +31,8 @@
     "date-holidays": "^3.37.0",
     "tailwindcss": "^4.3.3",
     "typescript": "^7.0.2",
-    "vite": "^8.3.2"
+    "vite": "^8.3.2",
+    "vitest": "^5.0.4"
   },
   "engines": {
     "node": ">=22.13"

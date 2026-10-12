@@ -6,12 +6,13 @@ Las reglas globales de `~/.claude/CLAUDE.md` rigen acá. Lo que sigue las comple
 
 ## Gates
 
-- `npm run build` (tsc, vite, precompresión y servidor) termina sin errores ni warnings. Un warning de Vite se arregla en el código o la config de build, sin subir el límite.
-- No hay tests automáticos todavía. Hasta que existan, un cambio en la lógica se prueba manejando la app (`.claude/launch.json`: `guardias` para desarrollo, `guardias-dist` para el build compilado) y se dice qué escenarios corrieron.
+- `npm run build` (tsc sobre `src/` incluidos los tests, vite, precompresión y servidor) termina sin errores ni warnings. Un warning de Vite se arregla en el código o la config de build, sin subir el límite.
+- `npm test` (vitest) pasa entero y cada test tiene tope de 3 s en `vite.config.ts`. Un test que no entre en ese tope es un hallazgo: se acepta con su razón escrita al lado, no se sube el tope. Los de `src/fairness.test.ts` y `src/search.test.ts` se escribieron a ciegas, desde las firmas y sus comentarios.
+- Un fix de un defecto entra con un test que fallaba antes. Un cambio visual o de interacción se prueba manejando la app (`.claude/launch.json`: `guardias` para desarrollo, `guardias-dist` para el build compilado) y se dice qué escenarios corrieron.
 
 ## Justicia y recomendaciones
 
-- `src/fairness.ts` define el puntaje (`scoreShifts`, `compareScores`) y `src/search.ts` lo maximiza con un evaluador incremental sobre arreglos tipados. Los dos tienen que dar exactamente el mismo puntaje para cualquier calendario. Quien cambie una categoría, un peso o el orden de comparación en uno cambia el otro en el mismo commit y comprueba la igualdad con un calendario aleatorio de cada tamaño de grupo (3 y 4 personas).
+- `src/fairness.ts` define el puntaje (`scoreShifts`, `compareScores`) y `src/search.ts` lo maximiza con un evaluador incremental sobre arreglos tipados. Los dos tienen que dar exactamente el mismo puntaje para cualquier calendario. Quien cambie una categoría, un peso o el orden de comparación en uno cambia el otro en el mismo commit. El test diferencial de `src/search.test.ts` (200 calendarios aleatorios para grupos de 3 y de 4) lo comprueba.
 - Los datos viven en `localStorage` bajo `guardias-v1` (zustand persist) y, con `?group=`, en el servidor. Un cambio en la forma de lo guardado necesita migración.
 
 ## Deploy

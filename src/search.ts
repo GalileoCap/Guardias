@@ -408,7 +408,8 @@ export function suggestAssignments(
 ): Record<string, string> {
   const working: Shifts = { ...shifts }
   const result: Record<string, string> = {}
-  const ordered = [...dates].sort(
+  const open = dates.filter((d) => !shifts[d])
+  const ordered = open.sort(
     (a, b) => categoriesOf(b, holiday).length - categoriesOf(a, holiday).length || a.localeCompare(b),
   )
   for (const date of ordered) {
@@ -429,6 +430,6 @@ export function suggestAssignments(
       if (found[i] >= 0) working[d] = active[found[i]].id
     })
   }
-  for (const date of free) if (working[date] && (dates.includes(date) || working[date] !== shifts[date])) result[date] = working[date]!
+  for (const date of free) if (working[date] && (open.includes(date) || working[date] !== shifts[date])) result[date] = working[date]!
   return result
 }
