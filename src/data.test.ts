@@ -1,6 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { defaultSettings } from './data'
-import { removePersonFrom } from './data'
+import { applyPatch, defaultSettings, diff, emptyData, normalize, removePersonFrom } from './data'
 import type { AppData } from './types'
 
 const person = (id: string) => ({ id, name: id, color: '#fff', active: true })
@@ -9,6 +8,7 @@ const base = (): AppData => ({
   people: [person('flor'), person('ana')],
   shifts: { '2026-10-10': 'flor', '2026-10-16': 'flor', '2026-10-20': 'flor', '2026-10-21': 'ana', '2026-10-22': null },
   quirofano: { '2026-10-05': 'flor', '2026-10-12': 'flor', '2026-10-19': 'flor', '2026-10-26': 'ana' },
+  tasks: {},
   settings: { ...defaultSettings, quirofanoOrder: ['flor', 'ana'] },
 })
 
@@ -48,5 +48,63 @@ describe('removePersonFrom', () => {
   it('no toca a las demás personas', () => {
     const out = removePersonFrom(base(), 'flor', '2026-10-16')
     expect(out.people.find((p) => p.id === 'ana')).toEqual(person('ana'))
+  })
+})
+
+describe('tareas (Curva y Campo)', () => {
+  const withTasks = (): AppData => ({
+    ...base(),
+    tasks: {
+      t1: { kind: 'curva', date: '2026-10-07', personId: 'flor' },
+      t2: { kind: 'curva', date: '2026-10-14', personId: 'flor' },
+      t3: { kind: 'campo', date: '2026-10-21', personId: 'flor' },
+      t4: { kind: 'campo', date: '2026-10-21', personId: 'ana' },
+    },
+  })
+
+  it('eliminar a una persona conserva las anotaciones pasadas y suelta las de hoy en adelante', () => {
+    const d = withTasks()
+    d.tasks.t5 = { kind: 'campo', date: '2026-10-16', personId: 'flor' }
+    const out = removePersonFrom(d, 'flor', '2026-10-16')
+    expect(Object.keys(out.tasks).sort()).toEqual(['t1', 't2', 't4'])
+  })
+
+  it('una persona con solo anotaciones pasadas queda como inactiva en la lista', () => {
+    const d: AppData = { ...base(), shifts: {}, quirofano: {}, tasks: { t1: { kind: 'campo', date: '2026-10-05', personId: 'flor' } } }
+    const out = removePersonFrom(d, 'flor', '2026-10-16')
+    expect(out.people.find((p) => p.id === 'flor')?.active).toBe(false)
+  })
+
+  it('normalize descarta anotaciones mal formadas y acepta datos viejos sin tareas', () => {
+    const ok = { kind: 'curva', date: '2026-10-12', personId: 'ana' }
+    const raw = {
+      people: [person('ana')],
+      shifts: {},
+      tasks: {
+        ok,
+        k: { ...ok, kind: 'otra' },
+        d: { ...ok, date: 'x' },
+        p: { kind: 'campo', date: '2026-10-12' },
+      },
+    }
+    expect(normalize(raw)!.tasks).toEqual({ ok })
+    expect(normalize({ people: [], shifts: {} })!.tasks).toEqual({})
+  })
+
+  it('un parche agrega y borra anotaciones por clave, y descarta las de personas que ya no existen', () => {
+    const doc: AppData = { ...emptyData(), people: [person('ana')], tasks: { gone: { kind: 'curva', date: '2026-10-07', personId: 'ana' } } }
+    const out = applyPatch(doc, {
+      tasks: { set: { n: { kind: 'campo', date: '2026-10-14', personId: 'ana' }, x: { kind: 'campo', date: '2026-10-14', personId: 'nadie' } }, del: ['gone'] },
+    })
+    expect(Object.keys(out.tasks)).toEqual(['n'])
+  })
+
+  it('diff solo manda las anotaciones que cambiaron', () => {
+    const a = withTasks()
+    expect(diff(a, structuredClone(a))).toBeNull()
+    const b = structuredClone(a)
+    b.tasks.t1.personId = 'ana'
+    delete b.tasks.t2
+    expect(diff(a, b)).toEqual({ tasks: { set: { t1: b.tasks.t1 }, del: ['t2'] } })
   })
 })

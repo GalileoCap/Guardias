@@ -7,6 +7,7 @@ import FullCalendar from '@fullcalendar/react'
 import { useCallback, useMemo, useRef, useState } from 'react'
 import { addDaysTo, isoOf, mondayOf } from '../dates'
 import { hasIssue, rankCandidates, scoreShifts } from '../fairness'
+import { TASK_KINDS, missingTaskWeeks } from '../tasks'
 import { suggestAssignments } from '../search'
 import { contrastText, useHolidayLookup, useProblems, useQuirofano } from '../hooks'
 import { useStore } from '../store'
@@ -26,10 +27,31 @@ const PLUGINS = [dayGridPlugin, interactionPlugin]
 const LOCALES = [esLocale]
 const HEADER_TOOLBAR = { left: 'title', center: '', right: 'today prev,next' }
 const BUTTON_TEXT = { today: 'Hoy' }
+// Las guardias (`order` 0) van arriba en cada celda; Curva y Campo, y los avisos de que faltan, debajo
+const EVENT_ORDER = 'order,title'
 
 // El motivo de cada guardia que perjudica va como tooltip del evento
 const renderEvent = (arg: EventContentArg) => {
-  const { problems, soft, tip } = arg.event.extendedProps as { problems?: string[]; soft?: boolean; tip?: string }
+  const { problems, soft, tip, task } = arg.event.extendedProps as {
+    problems?: string[]
+    soft?: boolean
+    tip?: string
+    task?: { label: string; short: string; name?: string }
+  }
+  if (task) {
+    // En el teléfono las celdas son angostas: el nombre de la tarea va abreviado
+    return (
+      <span title={tip} className="block truncate">
+        <span className="sm:hidden">{task.short}</span>
+        <span className="hidden sm:inline">{task.label}</span>
+        {task.name && (
+          <>
+            <span className="hidden sm:inline"> ·</span> {task.name}
+          </>
+        )}
+      </span>
+    )
+  }
   const tooltip = tip ?? (problems && [...problems, ...(soft ? ['(Ninguna otra persona lo haría mejor)'] : [])].join('\n'))
   // Aviso fuerte: ícono de advertencia pleno. Si no había mejor opción: el mismo ícono pero tenue, además del borde punteado
   return (
@@ -53,7 +75,7 @@ export default function CalendarView({
   highlightId: string | null
   onHighlight: (id: string | null) => void
 }) {
-  const { people, shifts, quirofano: manualQuirofano, settings, setShift, setShifts, removeShift } = useStore()
+  const { people, shifts, quirofano: manualQuirofano, tasks, settings, setShift, setShifts, removeShift } = useStore()
   const holiday = useHolidayLookup()
   const [mode, setMode] = useState<Mode>('assign')
   const [openDate, setOpenDate] = useState<string | null>(null)
@@ -122,6 +144,12 @@ export default function CalendarView({
     })
   }
 
+  // Semanas terminadas sin Curva o sin Campo (lunes de cada una)
+  const missingTasks = useMemo(() => {
+    const today = iso(new Date())
+    return TASK_KINDS.map((kind) => ({ kind, weeks: missingTaskWeeks(tasks, kind.key, today) }))
+  }, [tasks])
+
   const events = useMemo<EventInput[]>(() => {
     const emphasis = (personId: string | null | undefined) =>
       highlightId ? [personId === highlightId ? 'highlighted' : 'dimmed'] : []
@@ -138,7 +166,7 @@ export default function CalendarView({
           allDay: true,
           title: person ? person.name : 'Sin asignar',
           classNames: [...(person ? [] : ['unassigned']), ...emphasis(personId), ...(flagged ? [soft ? 'problem-soft' : 'problem'] : [])],
-          extendedProps: { problems: flagged, soft },
+          extendedProps: { problems: flagged, soft, order: 0 },
           ...(person && {
             backgroundColor: person.color,
             borderColor: person.color,
@@ -157,11 +185,46 @@ export default function CalendarView({
         backgroundColor: person.color,
         borderColor: person.color,
         textColor: contrastText(person.color),
-        extendedProps: { date, tip: `Recomendada: ${person.name}. Tocá el día para elegir a otra persona.` },
+        extendedProps: { date, order: 0, tip: `Recomendada: ${person.name}. Tocá el día para elegir a otra persona.` },
       }
     })
-    return [...real, ...ghosts]
-  }, [shifts, suggestions, peopleById, highlightId, problems, showProblems, unavoidable])
+    const done = Object.values(tasks).flatMap((t): EventInput[] => {
+      const person = peopleById.get(t.personId)
+      const index = TASK_KINDS.findIndex((k) => k.key === t.kind)
+      if (!person || index < 0) return []
+      const { label, short } = TASK_KINDS[index]
+      return [
+        {
+          start: t.date,
+          allDay: true,
+          title: `${label} · ${person.name}`,
+          classNames: ['task', ...emphasis(t.personId)],
+          backgroundColor: `color-mix(in oklab, ${person.color} 22%, white)`,
+          borderColor: person.color,
+          textColor: 'var(--color-base-content)',
+          extendedProps: { date: t.date, isTask: true, order: 1 + index * 2, task: { label, short, name: person.name }, tip: `${label}: ${person.name}` },
+        },
+      ]
+    })
+    const missing = missingTasks.flatMap(({ kind, weeks }, index) =>
+      weeks.map(
+        (week): EventInput => ({
+          start: week,
+          allDay: true,
+          title: `Falta ${kind.label}`,
+          classNames: ['task-missing'],
+          extendedProps: {
+            date: week,
+            isTask: true,
+            order: 2 + index * 2,
+            task: { label: `Falta ${kind.label}`, short: `Falta ${kind.short}` },
+            tip: `Esta semana no tiene ${kind.label}. Tocá el día para anotarla.`,
+          },
+        }),
+      ),
+    )
+    return [...real, ...ghosts, ...done, ...missing]
+  }, [shifts, suggestions, tasks, missingTasks, peopleById, highlightId, problems, showProblems, unavoidable])
 
   // FullCalendar vuelve a dibujar todo si alguna de sus funciones cambia de identidad: las que dependen del estado
   // llaman a la versión más reciente por una ref, y las demás se memorizan.
@@ -176,7 +239,12 @@ export default function CalendarView({
   const handleDayRef = useRef(handleDay)
   handleDayRef.current = handleDay
   const onDateClick = useCallback((arg: DateClickArg) => handleDayRef.current(arg.dateStr), [])
-  const onEventClick = useCallback((arg: EventClickArg) => handleDayRef.current(arg.event.extendedProps.date ?? arg.event.id), [])
+  const onEventClick = useCallback((arg: EventClickArg) => {
+    const { date, isTask } = arg.event.extendedProps
+    // Tocar una tarea siempre abre el día: en "Marcar días" no debe quitar ni agregar la guardia de esa fecha
+    if (isTask) setOpenDate(date)
+    else handleDayRef.current(date ?? arg.event.id)
+  }, [])
 
   const onDatesSet = useCallback((arg: DatesSetArg) => {
     const weeks: string[] = []
@@ -311,6 +379,7 @@ export default function CalendarView({
             dayMaxEvents={false}
             events={events}
             eventContent={renderEvent}
+            eventOrder={EVENT_ORDER}
             datesSet={onDatesSet}
             dateClick={onDateClick}
             eventClick={onEventClick}

@@ -122,6 +122,18 @@ body::before {
   opacity: 0.75;
 }
 
+/* Curva y Campo: más chicos y de fondo suave, para que la guardia mande en la celda */
+.fc .fc-event.task { font-size: 0.7rem; padding: 0 8px; font-weight: 500; border-width: 1px; }
+.fc .fc-event.task-missing {
+  font-size: 0.7rem;
+  padding: 0 8px;
+  background: color-mix(in oklab, var(--color-error) 8%, transparent);
+  border: 1px dashed var(--color-error);
+}
+.fc .fc-event.task-missing,
+.fc .fc-event.task-missing .fc-event-main,
+.fc .fc-event.task-missing .fc-event-title { color: var(--color-error); }
+
 .fc .fc-event.dimmed { opacity: 0.18; }
 .fc .fc-event.highlighted {
   box-shadow: 0 0 0 2px var(--color-base-content);
@@ -151,6 +163,7 @@ body::before {
   .fc .fc-daygrid-day-number { font-size: 0.78rem; padding: 2px 4px; }
   .fc .fc-day-today .fc-daygrid-day-number { margin: 2px; padding: 0 5px; }
   .fc .fc-event { font-size: 0.66rem; padding: 1px 2px; text-align: center; }
+  .fc .fc-event.task, .fc .fc-event.task-missing { font-size: 0.58rem; padding: 0 2px; }
   .fc .fc-daygrid-event { margin-inline: 2px; }
 }
 

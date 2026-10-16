@@ -1,15 +1,76 @@
 import { format, parseISO } from 'date-fns'
 import { es } from 'date-fns/locale'
-import { useMemo } from 'react'
+import { useMemo, useState } from 'react'
+import { isoOf, mondayOf } from '../dates'
 import { CATEGORIES, categoriesOf, hasIssue, rankCandidates } from '../fairness'
 import { useHolidayLookup, useIgnoreGhostClick, useProblems, useQuirofano } from '../hooks'
 import { useStore } from '../store'
+import { TASK_KINDS, curvaDefault, missingTaskWeeks } from '../tasks'
+import type { TaskKind } from '../types'
 
 const days = (n: number) => (n === 1 ? '1 día' : `${n} días`)
 
 function nearestLabel(before: number | null, after: number | null) {
   const nearest = Math.min(before ?? Infinity, after ?? Infinity)
   return Number.isFinite(nearest) ? ` · Más cercana: ${days(nearest)}` : ''
+}
+
+/** Anotaciones de una tarea (Curva o Campo) en el día: quién la hizo, y agregar o quitar. No cuentan en la justicia. */
+function TaskRow({ kind, label, date }: { kind: TaskKind; label: string; date: string }) {
+  const { people, tasks, addTask, removeTask } = useStore()
+  const quirofano = useQuirofano()
+  const peopleById = useMemo(() => new Map(people.map((p) => [p.id, p])), [people])
+  const active = people.filter((p) => p.active)
+  // La Curva viene con quien tuvo quirófano la semana anterior
+  const suggested = kind === 'curva' ? curvaDefault(quirofano, date) : null
+  const [picked, setPicked] = useState(active.some((p) => p.id === suggested) ? suggested! : '')
+  const entries = Object.entries(tasks).filter(([, t]) => t.kind === kind && t.date === date)
+  const missing = useMemo(
+    () => missingTaskWeeks(tasks, kind, isoOf(new Date())).includes(mondayOf(date)),
+    [tasks, kind, date],
+  )
+
+  return (
+    <div className="mt-2">
+      <div className="flex flex-wrap items-center gap-2">
+        <span className="text-sm font-semibold">{label}</span>
+        {missing && <span className="badge badge-error badge-soft badge-sm">falta esta semana</span>}
+        {entries.map(([id, t]) => {
+          const person = peopleById.get(t.personId)
+          return (
+            <span key={id} className="badge badge-ghost gap-1.5 pr-1">
+              <span className="inline-block size-2 rounded-full" style={{ background: person?.color }} />
+              {person?.name ?? 'Alguien'}
+              <button className="btn btn-ghost btn-xs btn-circle size-5 min-h-0" aria-label={`Quitar ${label} de ${person?.name ?? 'alguien'}`} onClick={() => removeTask(id)}>
+                ×
+              </button>
+            </span>
+          )
+        })}
+      </div>
+      <div className="mt-1 flex gap-2">
+        <select className="select select-sm min-w-0 flex-1" value={picked} aria-label={`Quién hizo ${label}`} onChange={(e) => setPicked(e.target.value)}>
+          <option value="">Elegir persona…</option>
+          {active.map((p) => (
+            <option key={p.id} value={p.id}>
+              {p.name}
+              {p.id === suggested ? ' (quirófano la semana anterior)' : ''}
+            </option>
+          ))}
+        </select>
+        <button
+          className="btn btn-sm btn-primary"
+          disabled={!picked}
+          onClick={() => {
+            addTask(kind, date, picked)
+            setPicked('')
+          }}
+        >
+          Agregar
+        </button>
+      </div>
+    </div>
+  )
 }
 
 export default function DayDialog({ date, onClose }: { date: string; onClose: () => void }) {
@@ -109,6 +170,14 @@ export default function DayDialog({ date, onClose }: { date: string; onClose: ()
           ))}
         </ul>
         <p className="mt-1 text-xs text-base-content/50">Los números no cuentan esta fecha.</p>
+
+        <div className="mt-4 border-t border-base-300 pt-3">
+          <h4 className="text-sm font-bold">Curva y Campo</h4>
+          <p className="text-xs text-base-content/50">Se anotan por día, pueden ser varias por semana y no cuentan en la justicia.</p>
+          {TASK_KINDS.map((k) => (
+            <TaskRow key={k.key} kind={k.key} label={k.label} date={date} />
+          ))}
+        </div>
 
         <div className="modal-action flex-wrap justify-between gap-2">
           <div className="flex gap-2">

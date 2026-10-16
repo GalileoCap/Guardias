@@ -11,6 +11,14 @@ export type Shifts = Record<string, string | null>
 /** 'YYYY-MM-DD' del lunes de la semana -> id de quien está de quirofanero */
 export type Quirofano = Record<string, string>
 
+export type TaskKind = 'curva' | 'campo'
+
+/** Una vez que alguien hizo la tarea el día `date`. Puede haber varias por semana y no cuentan en la justicia. */
+export type Task = { kind: TaskKind; date: string; personId: string }
+
+/** id de la anotación -> anotación */
+export type Tasks = Record<string, Task>
+
 export type CustomHoliday = { date: string; name: string }
 
 export type Settings = {
@@ -29,5 +37,6 @@ export type AppData = {
   people: Person[]
   shifts: Shifts
   quirofano: Quirofano
+  tasks: Tasks
   settings: Settings
 }
