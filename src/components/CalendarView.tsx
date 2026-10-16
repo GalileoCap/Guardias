@@ -80,7 +80,7 @@ export default function CalendarView({
   highlightId: string | null
   onHighlight: (id: string | null) => void
 }) {
-  const { people, shifts, quirofano: manualQuirofano, tasks, taskDays, settings, setShift, setShifts, removeShift } = useStore()
+  const { people, shifts, quirofano: manualQuirofano, tasks, taskDays, settings, setShift, setShifts, setTasks, removeShift } = useStore()
   const r1 = settings.mode === 'r1' // quirófano, Curva y Campo solo en R1
   const holiday = useHolidayLookup()
   const [mode, setMode] = useState<Mode>('assign')
@@ -122,7 +122,6 @@ export default function CalendarView({
     () => Object.fromEntries(Object.entries(suggestions).filter(([d]) => range && d >= range.start && d < range.end)),
     [suggestions, range],
   )
-  const applicableCount = Object.keys(inMonth).length
   const [reshuffle, setReshuffle] = useState<Reshuffle | null>(null)
   const inVisibleMonth = (date: string) => !!range && date >= range.start && date < range.end
 
@@ -136,7 +135,10 @@ export default function CalendarView({
     const changes = movable
       .filter((date) => full[date] && full[date] !== shifts[date])
       .map((date) => ({ date, from: peopleById.get(shifts[date]!)!, to: peopleById.get(full[date])! }))
-    if (changes.length === 0) return setShifts(inMonth)
+    if (changes.length === 0) {
+      setShifts(inMonth)
+      return applyCampo()
+    }
     const reshuffleInMonth = Object.fromEntries(Object.entries(full).filter(([date]) => inVisibleMonth(date)))
     const score = (assignments: Record<string, string | null>) =>
       scoreShifts(people, { ...shifts, ...assignments }, quirofano, settings, holiday)
@@ -165,6 +167,18 @@ export default function CalendarView({
         : { ...taskGaps(tasks, taskDays, kind.key, today, from, to), suggestions: {} as Record<string, string> }),
     }))
   }, [r1, tasks, taskDays, range, people, settings, quirofano])
+
+  // El Campo recomendado de lo que falta y viene en el mes que se ve; va junto con las guardias
+  const campoInMonth = useMemo(() => {
+    const plan = taskGapsByKind.find((t) => t.kind.key === 'campo')
+    if (!plan) return {}
+    const dates = [...plan.missing, ...plan.pending].filter(inVisibleMonth)
+    return Object.fromEntries(dates.filter((d) => plan.suggestions[d]).map((d) => [d, plan.suggestions[d]]))
+  }, [taskGapsByKind, range])
+  const applyCampo = () => {
+    if (Object.keys(campoInMonth).length > 0) setTasks('campo', campoInMonth)
+  }
+  const applicableCount = Object.keys(inMonth).length + Object.keys(campoInMonth).length
 
   const events = useMemo<EventInput[]>(() => {
     const emphasis = (personId: string | null | undefined) =>
@@ -456,10 +470,12 @@ export default function CalendarView({
           onClose={() => setReshuffle(null)}
           onFillOnly={() => {
             setShifts(reshuffle.fillOnly)
+            applyCampo()
             setReshuffle(null)
           }}
           onReshuffle={() => {
             setShifts(reshuffle.reshuffle)
+            applyCampo()
             setReshuffle(null)
           }}
         />

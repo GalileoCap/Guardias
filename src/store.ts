@@ -24,6 +24,8 @@ type Actions = {
   setQuirofano: (week: string, personId: string | null) => void
   /** Anota que `personId` hizo la tarea el día `date`; reemplaza a quien estuviera anotado: hay una por tarea y día. */
   setTask: (kind: TaskKind, date: string, personId: string) => void
+  /** Anota varias de una vez: fecha → persona */
+  setTasks: (kind: TaskKind, assignments: Record<string, string>) => void
   removeTask: (kind: TaskKind, date: string) => void
   /** Días de la semana en que toca la tarea en `month` ('YYYY-MM'). null = sin configuración propia: hereda del mes anterior */
   setTaskDays: (kind: TaskKind, month: string, days: number[] | null) => void
@@ -69,6 +71,13 @@ export const useStore = create<AppData & Actions>()(
           return { quirofano: personId ? { ...rest, [week]: personId } : rest }
         }),
       setTask: (kind, date, personId) => set((s) => ({ tasks: { ...s.tasks, [taskKey(kind, date)]: { kind, date, personId } } })),
+      setTasks: (kind, assignments) =>
+        set((s) => ({
+          tasks: {
+            ...s.tasks,
+            ...Object.fromEntries(Object.entries(assignments).map(([date, personId]) => [taskKey(kind, date), { kind, date, personId }])),
+          },
+        })),
       removeTask: (kind, date) =>
         set((s) => {
           const { [taskKey(kind, date)]: _, ...rest } = s.tasks
