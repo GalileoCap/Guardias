@@ -1,5 +1,6 @@
 import { useRef, useState } from 'react'
 import { normalize } from '../data'
+import { addDaysTo, isoOf } from '../dates'
 import { GROUP } from '../group'
 import { useStore } from '../store'
 import { createGroup } from '../sync'
@@ -34,9 +35,13 @@ function Card({ title, hint, children }: { title: string; hint?: string; childre
 }
 
 function PeopleCard() {
-  const { people, shifts, addPerson, updatePerson, removePerson } = useStore()
+  const { people, shifts, quirofano, addPerson, updatePerson, removePerson } = useStore()
   const [name, setName] = useState('')
-  const shiftsOf = (id: string) => Object.values(shifts).filter((p) => p === id).length
+  const today = isoOf(new Date())
+  // lo que se des-asigna al eliminar: guardias de hoy en adelante y semanas de quirófano que no terminaron
+  const upcomingOf = (id: string) =>
+    Object.entries(shifts).filter(([d, p]) => p === id && d >= today).length +
+    Object.entries(quirofano).filter(([w, p]) => p === id && addDaysTo(w, 6) >= today).length
 
   const submit = (e: React.FormEvent) => {
     e.preventDefault()
@@ -75,10 +80,10 @@ function PeopleCard() {
               className="btn btn-ghost btn-sm btn-square text-error"
               title="Eliminar"
               onClick={() => {
-                const n = shiftsOf(p.id)
+                const n = upcomingOf(p.id)
                 const msg = n
-                  ? `${p.name} tiene ${n} guardia(s) cargada(s); quedarían sin asignar. ¿Eliminar igual?`
-                  : `¿Eliminar a ${p.name}?`
+                  ? `${p.name} tiene ${n} guardia(s) o semana(s) de quirófano de hoy en adelante; quedarían sin asignar. Lo ya pasado sigue a su nombre. ¿Eliminar?`
+                  : `¿Eliminar a ${p.name}? Lo ya pasado sigue a su nombre.`
                 if (confirm(msg)) removePerson(p.id)
               }}
             >

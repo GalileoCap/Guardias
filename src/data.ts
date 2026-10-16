@@ -55,6 +55,26 @@ export function normalize(raw: unknown): AppData | null {
   return { people, shifts, quirofano, settings }
 }
 
+const sundayOf = (monday: string) => new Date(Date.parse(`${monday}T00:00:00Z`) + 6 * 86_400_000).toISOString().slice(0, 10)
+
+/**
+ * Elimina a una persona sin tocar el pasado: sus guardias y semanas de quirófano ya terminadas siguen a su nombre,
+ * y las de hoy en adelante quedan sin asignar (para que se vuelvan a recomendar). Si conserva historial queda en la
+ * lista como inactiva, porque una asignación a alguien que no está en `people` se descarta al sincronizar.
+ */
+export function removePersonFrom(d: AppData, id: string, today: string): AppData {
+  const shifts: Shifts = Object.fromEntries(Object.entries(d.shifts).map(([date, p]) => [date, p === id && date >= today ? null : p]))
+  // una semana de quirófano (clave = lunes) terminó si su domingo es anterior a hoy
+  const quirofano: Quirofano = Object.fromEntries(Object.entries(d.quirofano).filter(([week, p]) => p !== id || sundayOf(week) < today))
+  const hasHistory = Object.values(shifts).includes(id) || Object.values(quirofano).includes(id)
+  return {
+    people: hasHistory ? d.people.map((p) => (p.id === id ? { ...p, active: false } : p)) : d.people.filter((p) => p.id !== id),
+    shifts,
+    quirofano,
+    settings: { ...d.settings, quirofanoOrder: d.settings.quirofanoOrder.filter((x) => x !== id) },
+  }
+}
+
 /** Quita referencias a personas que ya no existen (p. ej. alguien la borró mientras otra persona le asignaba una guardia). */
 function dropDangling(d: AppData): AppData {
   const ids = new Set(d.people.map((p) => p.id))

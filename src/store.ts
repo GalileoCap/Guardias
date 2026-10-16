@@ -1,6 +1,7 @@
 import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
-import { defaultSettings } from './data'
+import { defaultSettings, removePersonFrom } from './data'
+import { isoOf } from './dates'
 import { GROUP } from './group'
 import type { AppData, Person, Settings } from './types'
 
@@ -47,13 +48,7 @@ export const useStore = create<AppData & Actions>()(
         }),
       updatePerson: (id, patch) =>
         set((s) => ({ people: s.people.map((p) => (p.id === id ? { ...p, ...patch } : p)) })),
-      removePerson: (id) =>
-        set((s) => ({
-          people: s.people.filter((p) => p.id !== id),
-          shifts: Object.fromEntries(Object.entries(s.shifts).map(([d, p]) => [d, p === id ? null : p])),
-          quirofano: Object.fromEntries(Object.entries(s.quirofano).filter(([, p]) => p !== id)),
-          settings: { ...s.settings, quirofanoOrder: s.settings.quirofanoOrder.filter((x) => x !== id) },
-        })),
+      removePerson: (id) => set((s) => removePersonFrom(s, id, isoOf(new Date()))),
       setShift: (date, personId) => set((s) => ({ shifts: { ...s.shifts, [date]: personId } })),
       setShifts: (assignments) => set((s) => ({ shifts: { ...s.shifts, ...assignments } })),
       removeShift: (date) =>
