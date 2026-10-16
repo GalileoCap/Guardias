@@ -11,6 +11,7 @@ import { TASK_KINDS, campoPlan, taskGaps } from '../tasks'
 import { suggestAssignments } from '../search'
 import { contrastText, useHolidayLookup, useProblems, useQuirofano } from '../hooks'
 import { useStore } from '../store'
+import type { TaskKind } from '../types'
 import ApplyDialog, { type Reshuffle } from './ApplyDialog'
 import DayDialog from './DayDialog'
 import Icon from './Icon'
@@ -36,14 +37,18 @@ const renderEvent = (arg: EventContentArg) => {
     problems?: string[]
     soft?: boolean
     tip?: string
-    task?: { label: string; short: string; name?: string }
+    task?: { kind: TaskKind; missing?: boolean; name?: string }
   }
   if (task) {
-    // En el teléfono las celdas son angostas: el nombre de la tarea va abreviado
+    // En el teléfono las celdas son angostas: la palabra "Curva" o "Campo" se esconde y queda el ícono
     return (
       <span title={tip} className="block truncate">
-        <span className="sm:hidden">{task.short}</span>
-        <span className="hidden sm:inline">{task.label}</span>
+        <Icon name={task.kind} className="mr-0.5 size-2.5 -translate-y-px sm:mr-1 sm:size-3" />
+        {task.missing && <span className="sm:hidden">!</span>}
+        <span className="hidden sm:inline">
+          {task.missing && 'Falta '}
+          {TASK_KINDS.find((k) => k.key === task.kind)!.label}
+        </span>
         {task.name && (
           <>
             <span className="hidden sm:inline"> ·</span> {task.name}
@@ -202,7 +207,7 @@ export default function CalendarView({
       const person = peopleById.get(t.personId)
       const index = TASK_KINDS.findIndex((k) => k.key === t.kind)
       if (!person || index < 0) return []
-      const { label, short } = TASK_KINDS[index]
+      const { label } = TASK_KINDS[index]
       return [
         {
           start: t.date,
@@ -212,7 +217,7 @@ export default function CalendarView({
           backgroundColor: `color-mix(in oklab, ${person.color} 22%, white)`,
           borderColor: person.color,
           textColor: 'var(--color-base-content)',
-          extendedProps: { date: t.date, isTask: true, order: 1 + index * 2, task: { label, short, name: person.name }, tip: `${label}: ${person.name}` },
+          extendedProps: { date: t.date, isTask: true, order: 1 + index * 2, task: { kind: t.kind, name: person.name }, tip: `${label}: ${person.name}` },
         },
       ]
     })
@@ -234,7 +239,7 @@ export default function CalendarView({
             date,
             isTask: true,
             order,
-            task: { label: kind.label, short: kind.short, name: `${person.name}?` },
+            task: { kind: kind.key, name: `${person.name}?` },
             tip: `${lateNote}Recomendada para ${kind.label}: ${person.name}, la siguiente en el orden del quirófano. Tocá el día para anotarla.`,
           },
         }
@@ -248,7 +253,7 @@ export default function CalendarView({
           date,
           isTask: true,
           order,
-          task: late ? { label: `Falta ${kind.label}`, short: `Falta ${kind.short}` } : { label: kind.label, short: kind.short },
+          task: { kind: kind.key, missing: late },
           tip: `${late ? `Falta anotar la ${kind.label}.` : `Toca ${kind.label} este día.`} Tocá el día para anotarla.`,
         },
       }
@@ -387,6 +392,25 @@ export default function CalendarView({
             </button>
           )}
         </div>
+      </div>
+
+      <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-base-content/60">
+        <span className="flex items-center gap-1">
+          <Icon name="guardia" className="size-3.5" />
+          Guardia
+        </span>
+        {settings.quirofanoEnabled && (
+          <span className="flex items-center gap-1">
+            <Icon name="quirofano" className="size-3.5" />
+            Quirófano
+          </span>
+        )}
+        {TASK_KINDS.map((k) => (
+          <span key={k.key} className="flex items-center gap-1">
+            <Icon name={k.key} className="size-3.5" />
+            {k.label}
+          </span>
+        ))}
       </div>
 
       <div ref={cardRef} className={`cal-card card card-border bg-base-100 relative ${settings.quirofanoEnabled ? '' : 'no-gutter'}`}>

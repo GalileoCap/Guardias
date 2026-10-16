@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState, type RefObject } from 'react'
 import { weekOf } from '../fairness'
 import { contrastText } from '../hooks'
+import Icon from './Icon'
 import type { Person } from '../types'
 
 type Row = { week: string; top: number; height: number }
@@ -73,11 +74,11 @@ export default function WeekGutter({
     <div className="cal-gutter pointer-events-none absolute top-0">
       {layout.headerTop !== null && (
         <div
-          className="absolute hidden w-full text-center text-[10px] font-semibold uppercase text-base-content/60 sm:block"
+          className="absolute flex w-full justify-center text-base-content/60"
           style={{ top: layout.headerTop + 8 }}
           title="Quirófano"
         >
-          Quir.
+          <Icon name="quirofano" className="size-3.5" />
         </div>
       )}
       {layout.rows.map(({ week, top, height }, i) => {

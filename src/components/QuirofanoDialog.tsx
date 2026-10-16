@@ -4,6 +4,7 @@ import { useMemo } from 'react'
 import { rankQuirofano } from '../fairness'
 import { useHolidayLookup, useIgnoreGhostClick, useQuirofano } from '../hooks'
 import { useStore } from '../store'
+import Icon from './Icon'
 
 const fmt = (d: Date) => format(d, "d 'de' MMM", { locale: es })
 
@@ -29,7 +30,10 @@ export default function QuirofanoDialog({ week, onClose }: { week: string; onClo
   return (
     <dialog className="modal modal-open modal-bottom sm:modal-middle" {...ghostGuard} onClick={(e) => e.target === e.currentTarget && onClose()}>
       <div className="modal-box max-w-md">
-        <h3 className="text-lg font-bold">Quirófano</h3>
+        <h3 className="flex items-center gap-2 text-lg font-bold">
+          <Icon name="quirofano" className="size-5" />
+          Quirófano
+        </h3>
         <p className="text-sm text-base-content/70">
           Semana del {fmt(start)} al {fmt(addDays(start, 6))}
           {!manual && current && <span className="badge badge-ghost badge-sm ml-2">Automático según el orden</span>}

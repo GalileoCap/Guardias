@@ -21,6 +21,33 @@ const PATHS = {
     </>
   ),
   close: <path d="M18 6 6 18M6 6l12 12" />,
+  check: <path d="M20 6 9 17l-5-5" />,
+  // Lo que se anota en el calendario: guardia (luna), quirófano (tijeras), campo (carpa) y curva
+  guardia: <path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z" />,
+  quirofano: (
+    <>
+      <circle cx="6" cy="6" r="3" />
+      <path d="M8.12 8.12 12 12" />
+      <path d="M20 4 8.12 15.88" />
+      <circle cx="6" cy="18" r="3" />
+      <path d="M14.8 14.8 20 20" />
+    </>
+  ),
+  campo: (
+    <>
+      <path d="M3.5 21 14 3" />
+      <path d="M20.5 21 10 3" />
+      <path d="M15.5 21 12 15l-3.5 6" />
+      <path d="M2 21h20" />
+    </>
+  ),
+  curva: (
+    <>
+      <circle cx="19" cy="5" r="2" />
+      <circle cx="5" cy="19" r="2" />
+      <path d="M5 17A12 12 0 0 1 17 5" />
+    </>
+  ),
   up: <path d="m18 15-6-6-6 6" />,
   down: <path d="m6 9 6 6 6-6" />,
   left: <path d="m15 18-6-6 6-6" />,

@@ -2,9 +2,9 @@ import { addDaysTo, dayOfWeek, mondayOf } from './dates'
 import type { Quirofano, TaskDays, TaskKind, Tasks } from './types'
 
 /** Las tareas que se anotan, en el orden en que se muestran. */
-export const TASK_KINDS: { key: TaskKind; label: string; short: string }[] = [
-  { key: 'curva', label: 'Curva', short: 'Cu' },
-  { key: 'campo', label: 'Campo', short: 'Ca' },
+export const TASK_KINDS: { key: TaskKind; label: string }[] = [
+  { key: 'curva', label: 'Curva' },
+  { key: 'campo', label: 'Campo' },
 ]
 
 /** Días de la semana (0 = domingo) en que toca la tarea en `month` ('YYYY-MM'): los del último mes configurado hasta ese. */

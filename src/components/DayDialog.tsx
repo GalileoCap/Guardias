@@ -8,6 +8,7 @@ import { useHolidayLookup, useIgnoreGhostClick, useProblems, useQuirofano } from
 import { useStore } from '../store'
 import { TASK_KINDS, campoPlan, curvaDefault, taskGaps } from '../tasks'
 import type { TaskKind } from '../types'
+import Icon from './Icon'
 
 const days = (n: number) => (n === 1 ? '1 día' : `${n} días`)
 
@@ -17,16 +18,16 @@ function nearestLabel(before: number | null, after: number | null) {
 }
 
 /**
- * Quién hizo la tarea (Curva o Campo) en el día: una sola persona por tarea y día. Si todavía no hay nadie viene
- * preseleccionada la Curva con quien tuvo quirófano la semana anterior, y el Campo con la persona que sigue en el orden
- * del quirófano. No cuenta en la justicia.
+ * Quién hizo la tarea (Curva o Campo) en el día: una sola persona por tarea y día, o nadie. Elegirla la anota al
+ * instante. A la persona que sugiere el orden (para la Curva, quien tuvo quirófano la semana anterior; para el Campo,
+ * la que sigue en la rotación del quirófano) se la marca y va primera, pero no se anota sola.
  */
 function TaskRow({ kind, label, date }: { kind: TaskKind; label: string; date: string }) {
   const { people, tasks, taskDays, settings, setTask, removeTask } = useStore()
+  const [open, setOpen] = useState(false)
   const monday = mondayOf(date)
   const weeks = useMemo(() => [addDaysTo(monday, -7), monday], [monday])
   const quirofano = useQuirofano(weeks)
-  const peopleById = useMemo(() => new Map(people.map((p) => [p.id, p])), [people])
   const entry = tasks[taskKey(kind, date)]
   // Lo que falta en la semana de este día, y a quién recomendar para el Campo
   const plan = useMemo(() => {
@@ -37,51 +38,86 @@ function TaskRow({ kind, label, date }: { kind: TaskKind; label: string; date: s
     return { ...taskGaps(tasks, taskDays, kind, today, monday, addDaysTo(monday, 7)), suggestions: {} as Record<string, string> }
   }, [tasks, taskDays, kind, date, monday, people, settings, quirofano])
   const suggested = kind === 'curva' ? curvaDefault(quirofano, date) : (plan.suggestions[date] ?? null)
-  const suggestedNote = kind === 'curva' ? ' (quirófano la semana anterior)' : ' (recomendada)'
-  const options = people.filter((p) => p.active || p.id === entry?.personId)
-  const [picked, setPicked] = useState(entry?.personId ?? (options.some((p) => p.id === suggested) ? suggested! : ''))
-  const entryPerson = entry && peopleById.get(entry.personId)
+  const suggestedNote = kind === 'curva' ? 'quirófano la semana anterior' : 'recomendada'
+  const candidates = people.filter((p) => p.active || p.id === entry?.personId)
+  const options = [...candidates.filter((p) => p.id === suggested), ...candidates.filter((p) => p.id !== suggested)]
+  const current = entry && people.find((p) => p.id === entry.personId)
+
+  const choose = (personId: string | null) => {
+    if (personId) setTask(kind, date, personId)
+    else removeTask(kind, date)
+    setOpen(false)
+  }
 
   return (
-    <div className="mt-2">
+    <div className="mt-3">
       <div className="flex flex-wrap items-center gap-2">
+        <Icon name={kind} />
         <span className="text-sm font-semibold">{label}</span>
         {plan.missing.length > 0 && <span className="badge badge-error badge-soft badge-sm">falta esta semana</span>}
         {plan.pending.includes(date) && <span className="badge badge-ghost badge-sm">toca este día</span>}
-        {entry && (
-          <span className="badge badge-ghost gap-1.5 pr-1">
-            <span className="inline-block size-2 rounded-full" style={{ background: entryPerson?.color }} />
-            {entryPerson?.name ?? 'Alguien'}
+      </div>
+      <button
+        type="button"
+        className="btn btn-sm btn-block mt-1 justify-between font-normal"
+        style={current && { background: tint(current.color), borderColor: current.color }}
+        aria-haspopup="listbox"
+        aria-expanded={open}
+        aria-label={`${label}: ${current ? current.name : 'sin asignar'}`}
+        onClick={() => setOpen((v) => !v)}
+      >
+        <span className="flex min-w-0 items-center gap-2">
+          {current ? (
+            <>
+              <span className="inline-block size-3 shrink-0 rounded-full" style={{ background: current.color }} />
+              <span className="truncate font-medium">{current.name}</span>
+            </>
+          ) : (
+            <span className="text-base-content/60">Sin asignar</span>
+          )}
+        </span>
+        <Icon name={open ? 'up' : 'down'} />
+      </button>
+      {open && (
+        <ul role="listbox" aria-label={label} className="mt-1 flex flex-col gap-1 rounded-box border border-base-300 p-1">
+          <li>
             <button
-              className="btn btn-ghost btn-xs btn-circle size-5 min-h-0"
-              aria-label={`Quitar ${label} de ${entryPerson?.name ?? 'alguien'}`}
-              onClick={() => {
-                removeTask(kind, date)
-                setPicked(suggested ?? '')
-              }}
+              type="button"
+              role="option"
+              aria-selected={!entry}
+              className="btn btn-ghost btn-sm btn-block justify-start gap-2 font-normal"
+              onClick={() => choose(null)}
             >
-              ×
+              <span className="size-3 shrink-0" />
+              <span className="flex-1 text-left text-base-content/70">Sin asignar</span>
+              {!entry && <Icon name="check" />}
             </button>
-          </span>
-        )}
-      </div>
-      <div className="mt-1 flex gap-2">
-        <select className="select select-sm min-w-0 flex-1" value={picked} aria-label={`Quién hizo ${label}`} onChange={(e) => setPicked(e.target.value)}>
-          <option value="">Elegir persona…</option>
+          </li>
           {options.map((p) => (
-            <option key={p.id} value={p.id}>
-              {p.name}
-              {p.id === suggested ? suggestedNote : ''}
-            </option>
+            <li key={p.id}>
+              <button
+                type="button"
+                role="option"
+                aria-selected={p.id === entry?.personId}
+                className="btn btn-ghost btn-sm btn-block justify-start gap-2 font-normal"
+                style={{ background: tint(p.color) }}
+                onClick={() => choose(p.id)}
+              >
+                <span className="inline-block size-3 shrink-0 rounded-full" style={{ background: p.color }} />
+                <span className="min-w-0 flex-1 truncate text-left font-medium">{p.name}</span>
+                {p.id === suggested && <span className="badge badge-success badge-sm shrink-0">{suggestedNote}</span>}
+                {p.id === entry?.personId && <Icon name="check" />}
+              </button>
+            </li>
           ))}
-        </select>
-        <button className="btn btn-sm btn-primary" disabled={!picked || picked === entry?.personId} onClick={() => setTask(kind, date, picked)}>
-          {entry ? 'Cambiar' : 'Agregar'}
-        </button>
-      </div>
+        </ul>
+      )}
     </div>
   )
 }
+
+/** Fondo suave con el color de una persona. */
+const tint = (color: string) => `color-mix(in oklab, ${color} 18%, transparent)`
 
 export default function DayDialog({ date, onClose }: { date: string; onClose: () => void }) {
   const { people, shifts, settings, setShift, removeShift } = useStore()
@@ -130,7 +166,8 @@ export default function DayDialog({ date, onClose }: { date: string; onClose: ()
           </div>
         )}
 
-        <p className="mt-4 mb-2 text-sm text-base-content/70">
+        <p className="mt-4 mb-2 flex items-center gap-2 text-sm text-base-content/70">
+          <Icon name="guardia" />
           {candidates.length === 0
             ? 'No hay personas activas.'
             : candidates.every(hasIssue)
@@ -182,8 +219,6 @@ export default function DayDialog({ date, onClose }: { date: string; onClose: ()
         <p className="mt-1 text-xs text-base-content/50">Los números no cuentan esta fecha.</p>
 
         <div className="mt-4 border-t border-base-300 pt-3">
-          <h4 className="text-sm font-bold">Curva y Campo</h4>
-          <p className="text-xs text-base-content/50">Una Curva y un Campo por día como máximo. No cuentan en la justicia.</p>
           {TASK_KINDS.map((k) => (
             <TaskRow key={k.key} kind={k.key} label={k.label} date={date} />
           ))}

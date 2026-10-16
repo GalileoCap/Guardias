@@ -5,7 +5,7 @@ import { GROUP } from '../group'
 import { useStore } from '../store'
 import { createGroup } from '../sync'
 import { TASK_KINDS, taskWeekdays } from '../tasks'
-import Icon from './Icon'
+import Icon, { type IconName } from './Icon'
 
 export default function SettingsView() {
   return (
@@ -22,12 +22,15 @@ export default function SettingsView() {
   )
 }
 
-function Card({ title, hint, children }: { title: string; hint?: string; children: React.ReactNode }) {
+function Card({ title, icon, hint, children }: { title: string; icon?: IconName; hint?: string; children: React.ReactNode }) {
   return (
     <section className="card card-border bg-base-100">
       <div className="card-body gap-3 p-3 sm:p-4">
         <div>
-          <h2 className="card-title text-base">{title}</h2>
+          <h2 className="card-title text-base">
+            {icon && <Icon name={icon} className="size-5" />}
+            {title}
+          </h2>
           {hint && <p className="text-sm text-base-content/60">{hint}</p>}
         </div>
         {children}
@@ -134,6 +137,7 @@ function QuirofanoCard() {
     return (
       <Card
         title="Quirófano"
+        icon="quirofano"
         hint="Apagado: el calendario no muestra al quirofanero y las guardias se reparten sin tener en cuenta ninguna semana de quirófano. Lo ya cargado se conserva por si lo volvés a prender."
       >
         {toggle}
@@ -144,6 +148,7 @@ function QuirofanoCard() {
   return (
     <Card
       title="Orden del quirófano"
+      icon="quirofano"
       hint="Cada semana le toca a la persona siguiente de la lista; al llegar al final vuelve a la primera. El calendario completa solo el quirófano con este orden: si fijás a alguien a mano en una semana, las siguientes siguen desde ahí."
     >
       {toggle}
@@ -219,7 +224,7 @@ function QuirofanoCard() {
 function RulesCard() {
   const { settings, updateSettings } = useStore()
   return (
-    <Card title="Reglas del balance">
+    <Card title="Reglas del balance" icon="guardia">
       <label className="flex flex-col gap-1 text-sm">
         <span className="font-medium">Contar guardias desde</span>
         <span className="flex items-center gap-2">
@@ -279,7 +284,10 @@ function TaskDaysCard() {
         return (
           <div key={key} className="flex flex-col gap-1">
             <div className="flex flex-wrap items-center gap-2">
-              <span className="w-14 text-sm font-semibold">{kindLabel}</span>
+              <span className="flex w-20 items-center gap-1.5 text-sm font-semibold">
+                <Icon name={key} />
+                {kindLabel}
+              </span>
               <div className="join">
                 {WEEKDAYS.map(({ day, letter, name }) => (
                   <button
