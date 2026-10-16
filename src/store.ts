@@ -3,7 +3,7 @@ import { persist } from 'zustand/middleware'
 import { defaultSettings, removePersonFrom } from './data'
 import { isoOf } from './dates'
 import { GROUP } from './group'
-import type { AppData, Person, Settings, TaskKind } from './types'
+import type { AppData, Person, Settings } from './types'
 
 export { defaultSettings }
 
@@ -22,9 +22,6 @@ type Actions = {
   removeShift: (date: string) => void
   /** week = lunes de la semana. personId null = sin asignar */
   setQuirofano: (week: string, personId: string | null) => void
-  /** week = lunes de la semana */
-  addTask: (kind: TaskKind, week: string, personId: string) => void
-  removeTask: (id: string) => void
   updateSettings: (patch: Partial<Settings>) => void
   importData: (data: AppData) => void
   reset: () => void
@@ -36,7 +33,6 @@ export const useStore = create<AppData & Actions>()(
       people: [],
       shifts: {},
       quirofano: {},
-      tasks: {},
       settings: defaultSettings,
 
       addPerson: (name) =>
@@ -65,15 +61,9 @@ export const useStore = create<AppData & Actions>()(
           const { [week]: _, ...rest } = s.quirofano
           return { quirofano: personId ? { ...rest, [week]: personId } : rest }
         }),
-      addTask: (kind, week, personId) => set((s) => ({ tasks: { ...s.tasks, [crypto.randomUUID()]: { kind, week, personId } } })),
-      removeTask: (id) =>
-        set((s) => {
-          const { [id]: _, ...rest } = s.tasks
-          return { tasks: rest }
-        }),
       updateSettings: (patch) => set((s) => ({ settings: { ...s.settings, ...patch } })),
-      importData: (data) => set({ people: data.people, shifts: data.shifts, quirofano: data.quirofano ?? {}, tasks: data.tasks ?? {}, settings: { ...defaultSettings, ...data.settings } }),
-      reset: () => set({ people: [], shifts: {}, quirofano: {}, tasks: {}, settings: defaultSettings }),
+      importData: (data) => set({ people: data.people, shifts: data.shifts, quirofano: data.quirofano ?? {}, settings: { ...defaultSettings, ...data.settings } }),
+      reset: () => set({ people: [], shifts: {}, quirofano: {}, settings: defaultSettings }),
     }),
     {
       // en un grupo compartido, esto es solo la copia local (sin conexión) de los datos del servidor
@@ -84,7 +74,7 @@ export const useStore = create<AppData & Actions>()(
         const p = (persisted ?? {}) as Partial<AppData>
         return { ...current, ...p, settings: { ...current.settings, ...p.settings } }
       },
-      partialize: ({ people, shifts, quirofano, tasks, settings }) => ({ people, shifts, quirofano, tasks, settings }),
+      partialize: ({ people, shifts, quirofano, settings }) => ({ people, shifts, quirofano, settings }),
     },
   ),
 )

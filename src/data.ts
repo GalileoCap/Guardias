@@ -1,6 +1,6 @@
 // Lógica de datos compartida entre el cliente y el servidor (server/index.mjs la importa tal cual,
 // Node ≥ 22.18 ejecuta TypeScript borrando los tipos). Solo sintaxis "borrable": nada de enums ni imports de paquetes.
-import type { AppData, Person, Quirofano, Settings, Shifts, Tasks } from './types'
+import type { AppData, Person, Quirofano, Settings, Shifts } from './types'
 
 export const defaultSettings: Settings = {
   quirofanoEnabled: true,
@@ -10,14 +10,13 @@ export const defaultSettings: Settings = {
   countFrom: null,
 }
 
-export const emptyData = (): AppData => ({ people: [], shifts: {}, quirofano: {}, tasks: {}, settings: { ...defaultSettings } })
+export const emptyData = (): AppData => ({ people: [], shifts: {}, quirofano: {}, settings: { ...defaultSettings } })
 
 /** Cambios entre dos versiones. Se aplican por clave (no pisan lo que otra persona cambió en otro día/persona). */
 export type Patch = {
   people?: { upsert: Person[]; remove: string[] }
   shifts?: { set: Shifts; del: string[] }
   quirofano?: { set: Quirofano; del: string[] }
-  tasks?: { set: Tasks; del: string[] }
   settings?: Partial<Settings>
 }
 
@@ -43,12 +42,6 @@ export function normalize(raw: unknown): AppData | null {
   for (const [d, v] of Object.entries(raw.shifts)) if (DATE.test(d) && (v === null || typeof v === 'string')) shifts[d] = v
   const quirofano: Quirofano = {}
   for (const [d, v] of Object.entries(obj(raw.quirofano))) if (DATE.test(d) && typeof v === 'string') quirofano[d] = v
-  const tasks: Tasks = {}
-  for (const [id, t] of Object.entries(obj(raw.tasks))) {
-    if (isObj(t) && (t.kind === 'curva' || t.kind === 'campo') && typeof t.week === 'string' && DATE.test(t.week) && typeof t.personId === 'string') {
-      tasks[id] = { kind: t.kind, week: t.week, personId: t.personId }
-    }
-  }
   const s = obj(raw.settings)
   const settings: Settings = {
     quirofanoEnabled: typeof s.quirofanoEnabled === 'boolean' ? s.quirofanoEnabled : defaultSettings.quirofanoEnabled,
@@ -59,7 +52,7 @@ export function normalize(raw: unknown): AppData | null {
       .map((h) => ({ date: h.date, name: typeof h.name === 'string' ? h.name.slice(0, 80) : 'Feriado' })),
     countFrom: typeof s.countFrom === 'string' && DATE.test(s.countFrom) ? s.countFrom : null,
   }
-  return { people, shifts, quirofano, tasks, settings }
+  return { people, shifts, quirofano, settings }
 }
 
 const sundayOf = (monday: string) => new Date(Date.parse(`${monday}T00:00:00Z`) + 6 * 86_400_000).toISOString().slice(0, 10)
@@ -73,14 +66,11 @@ export function removePersonFrom(d: AppData, id: string, today: string): AppData
   const shifts: Shifts = Object.fromEntries(Object.entries(d.shifts).map(([date, p]) => [date, p === id && date >= today ? null : p]))
   // una semana de quirófano (clave = lunes) terminó si su domingo es anterior a hoy
   const quirofano: Quirofano = Object.fromEntries(Object.entries(d.quirofano).filter(([week, p]) => p !== id || sundayOf(week) < today))
-  const tasks: Tasks = Object.fromEntries(Object.entries(d.tasks).filter(([, t]) => t.personId !== id || sundayOf(t.week) < today))
-  const hasHistory =
-    Object.values(shifts).includes(id) || Object.values(quirofano).includes(id) || Object.values(tasks).some((t) => t.personId === id)
+  const hasHistory = Object.values(shifts).includes(id) || Object.values(quirofano).includes(id)
   return {
     people: hasHistory ? d.people.map((p) => (p.id === id ? { ...p, active: false } : p)) : d.people.filter((p) => p.id !== id),
     shifts,
     quirofano,
-    tasks,
     settings: { ...d.settings, quirofanoOrder: d.settings.quirofanoOrder.filter((x) => x !== id) },
   }
 }
@@ -92,7 +82,6 @@ function dropDangling(d: AppData): AppData {
     people: d.people,
     shifts: Object.fromEntries(Object.entries(d.shifts).map(([k, v]) => [k, v !== null && !ids.has(v) ? null : v])),
     quirofano: Object.fromEntries(Object.entries(d.quirofano).filter(([, v]) => ids.has(v))),
-    tasks: Object.fromEntries(Object.entries(d.tasks).filter(([, t]) => ids.has(t.personId))),
     settings: { ...d.settings, quirofanoOrder: d.settings.quirofanoOrder.filter((id) => ids.has(id)) },
   }
 }
@@ -110,17 +99,13 @@ export function applyPatch(doc: AppData, patch: Patch): AppData {
   for (const [d, v] of Object.entries(obj(patch.quirofano?.set))) if (DATE.test(d)) quirofano[d] = v
   for (const d of arr(patch.quirofano?.del)) delete quirofano[d as string]
 
-  const tasks: Tasks = { ...doc.tasks }
-  for (const [id, t] of Object.entries(obj(patch.tasks?.set))) tasks[id] = t
-  for (const id of arr(patch.tasks?.del)) delete tasks[id as string]
-
-  const merged = { people: [...people.values()], shifts, quirofano, tasks, settings: { ...doc.settings, ...obj(patch.settings) } }
+  const merged = { people: [...people.values()], shifts, quirofano, settings: { ...doc.settings, ...obj(patch.settings) } }
   return dropDangling(normalize(merged) ?? doc)
 }
 
 function mapDiff<V>(base: Record<string, V>, cur: Record<string, V>): { set: Record<string, V>; del: string[] } | null {
   const set: Record<string, V> = {}
-  for (const [k, v] of Object.entries(cur)) if (!(k in base) || !same(base[k], v)) set[k] = v
+  for (const [k, v] of Object.entries(cur)) if (!(k in base) || base[k] !== v) set[k] = v
   const del = Object.keys(base).filter((k) => !(k in cur))
   return Object.keys(set).length || del.length ? { set, del } : null
 }
@@ -139,8 +124,6 @@ export function diff(base: AppData, cur: AppData): Patch | null {
   if (shifts) patch.shifts = shifts
   const quirofano = mapDiff(base.quirofano, cur.quirofano)
   if (quirofano) patch.quirofano = quirofano
-  const tasks = mapDiff(base.tasks, cur.tasks)
-  if (tasks) patch.tasks = tasks
 
   const settings: Obj = {}
   for (const k of Object.keys(cur.settings) as (keyof Settings)[]) {

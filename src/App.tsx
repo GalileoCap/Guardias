@@ -1,16 +1,14 @@
 import { useState } from 'react'
 import CalendarView from './components/CalendarView'
 import FairnessBar from './components/FairnessBar'
-import TasksView from './components/TasksView'
 import SettingsView from './components/SettingsView'
 import Icon, { type IconName } from './components/Icon'
 import SyncBadge from './components/SyncBadge'
 
-type Tab = 'plan' | 'tasks' | 'config'
+type Tab = 'plan' | 'config'
 
 const TABS: { key: Tab; label: string; icon: IconName }[] = [
   { key: 'plan', label: 'Calendario', icon: 'calendar' },
-  { key: 'tasks', label: 'Curva y Campo', icon: 'tasks' },
   { key: 'config', label: 'Configuración', icon: 'settings' },
 ]
 
@@ -39,8 +37,6 @@ export default function App() {
           <CalendarView highlightId={highlightId} onHighlight={setHighlightId} />
           <FairnessBar highlightId={highlightId} onHighlight={setHighlightId} />
         </>
-      ) : tab === 'tasks' ? (
-        <TasksView />
       ) : (
         <SettingsView />
       )}
