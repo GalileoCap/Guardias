@@ -7,7 +7,7 @@ import FullCalendar from '@fullcalendar/react'
 import { useCallback, useMemo, useRef, useState } from 'react'
 import { addDaysTo, isoOf, mondayOf } from '../dates'
 import { hasIssue, rankCandidates, rotationOrder, scoreShifts } from '../fairness'
-import { TASK_KINDS, campoPlan, taskGaps } from '../tasks'
+import { TASK_KINDS, campoPlan, taskGaps, weeksFromCampoStart } from '../tasks'
 import { suggestAssignments } from '../search'
 import { contrastText, useHolidayLookup, useProblems, useQuirofano } from '../hooks'
 import { useStore } from '../store'
@@ -88,7 +88,9 @@ export default function CalendarView({
   const [openWeek, setOpenWeek] = useState<string | null>(null)
   const [range, setRange] = useState<{ start: string; end: string; weeks: string[] } | null>(null)
   // Quirófano de cada semana: lo cargado a mano + lo que corresponde por el orden de rotación (incluye las semanas a la vista)
-  const quirofano = useQuirofano(range?.weeks)
+  // (también las semanas desde donde empieza la cadena de recomendaciones del Campo)
+  const quirofanoWeeks = useMemo(() => (range && r1 ? weeksFromCampoStart(tasks, iso(new Date()), range.weeks) : range?.weeks), [range, r1, tasks])
+  const quirofano = useQuirofano(quirofanoWeeks)
   const [showSuggestions, setShowSuggestions] = useState(true)
   // Solo en el teléfono: los interruptores quedan plegados para que el calendario aparezca sin scrollear
   const [showOptions, setShowOptions] = useState(false)

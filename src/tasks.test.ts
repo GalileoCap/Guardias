@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { curvaDefault, suggestCampo, taskGaps, taskWeekdays } from './tasks'
+import { campoPlan, curvaDefault, suggestCampo, taskGaps, taskWeekdays } from './tasks'
 import type { TaskDays, Tasks } from './types'
 
 const t = (kind: 'curva' | 'campo', date: string, personId = 'ana') => ({ kind, date, personId })
@@ -207,6 +207,24 @@ describe('suggestCampo', () => {
   it('sin nadie que pueda hacerlo no recomienda', () => {
     expect(suggestCampo(['2026-10-08'], {}, [], {})).toEqual({})
     expect(suggestCampo(['2026-10-08'], {}, ['a'], { '2026-10-05': 'a' })).toEqual({})
+  })
+})
+
+describe('campoPlan', () => {
+  const order = ['a', 'b', 'c', 'd', 'e']
+  const taskDays: TaskDays = { 'campo:2026-10': [2, 4] }
+  const today = '2026-10-16'
+  const plan = (tasks: Tasks, from: string, to: string) => campoPlan(tasks, taskDays, today, from, to, order, {}).suggestions
+
+  it('sin Campo anotado la recomendación no depende del mes que se mira: sigue desde hoy', () => {
+    // martes y jueves desde el 20/10: el 1/12 es el decimotercero, y la rotación de 5 lo deja en 'c'
+    expect(plan({}, '2026-10-01', '2026-11-01')['2026-10-20']).toBe('a')
+    expect(plan({}, '2026-12-01', '2027-01-01')['2026-12-01']).toBe('c')
+  })
+
+  it('con Campo anotado sigue desde el primero, sea cual sea el mes que se mira', () => {
+    const tasks: Tasks = { x: t('campo', '2026-10-06', 'b') }
+    expect(plan(tasks, '2026-12-01', '2027-01-01')['2026-12-01']).toBe(plan(tasks, '2026-10-01', '2027-01-01')['2026-12-01'])
   })
 })
 

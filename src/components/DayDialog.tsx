@@ -6,7 +6,7 @@ import { taskKey } from '../data'
 import { CATEGORIES, categoriesOf, hasIssue, rankCandidates, rotationOrder } from '../fairness'
 import { useHolidayLookup, useIgnoreGhostClick, useProblems, useQuirofano } from '../hooks'
 import { useStore } from '../store'
-import { TASK_KINDS, campoPlan, curvaDefault, taskGaps } from '../tasks'
+import { TASK_KINDS, campoPlan, curvaDefault, taskGaps, weeksFromCampoStart } from '../tasks'
 import type { TaskKind } from '../types'
 import Icon from './Icon'
 
@@ -26,7 +26,7 @@ function TaskRow({ kind, label, date }: { kind: TaskKind; label: string; date: s
   const { people, tasks, taskDays, settings, setTask, removeTask } = useStore()
   const [open, setOpen] = useState(false)
   const monday = mondayOf(date)
-  const weeks = useMemo(() => [addDaysTo(monday, -7), monday], [monday])
+  const weeks = useMemo(() => weeksFromCampoStart(tasks, isoOf(new Date()), [addDaysTo(monday, -7), monday]), [tasks, monday])
   const quirofano = useQuirofano(weeks)
   const entry = tasks[taskKey(kind, date)]
   // Lo que falta en la semana de este día, y a quién recomendar para el Campo

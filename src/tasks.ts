@@ -97,10 +97,24 @@ export function suggestCampo(dates: string[], tasks: Tasks, order: string[], qui
   return out
 }
 
+/** Desde cuándo se encadena la recomendación del Campo: el primer Campo anotado o, sin ninguno, la semana de `today`; nunca después de `from`. */
+export function campoStart(tasks: Tasks, today: string, from: string): string {
+  const first = Object.values(tasks).filter((t) => t.kind === 'campo').map((t) => t.date).sort()[0]
+  return [first ?? mondayOf(today), from].sort()[0]
+}
+
+/** `weeks` (lunes, en orden) extendidas hacia atrás hasta la semana donde empieza la cadena del Campo, para que el quirófano las cubra. */
+export function weeksFromCampoStart(tasks: Tasks, today: string, weeks: string[]): string[] {
+  if (weeks.length === 0) return weeks
+  const out: string[] = []
+  for (let w = mondayOf(campoStart(tasks, today, weeks[0])); w < weeks[0]; w = addDaysTo(w, 7)) out.push(w)
+  return [...out, ...weeks]
+}
+
 /**
  * Lo que falta anotar del Campo entre `from` y `to` (como `taskGaps`) y a quién recomendar en cada fecha de eso y de
- * `extra`. La recomendación encadena desde el primer Campo anotado, no solo desde `from`: así el calendario y el
- * diálogo de un día dan lo mismo sin importar qué mes se esté viendo.
+ * `extra`. La recomendación encadena desde el primer Campo anotado o, sin ninguno, desde la semana de `today`, y no
+ * solo desde `from`: así el calendario y el diálogo de un día dan lo mismo sin importar qué mes se esté viendo.
  */
 export function campoPlan(
   tasks: Tasks,
@@ -112,8 +126,8 @@ export function campoPlan(
   quirofano: Quirofano,
   extra: string[] = [],
 ): { missing: string[]; pending: string[]; suggestions: Record<string, string> } {
-  const first = Object.values(tasks).filter((t) => t.kind === 'campo').map((t) => t.date).sort()[0]
-  const all = taskGaps(tasks, taskDays, 'campo', today, first !== undefined && first < from ? first : from, to)
+  const start = campoStart(tasks, today, from)
+  const all = taskGaps(tasks, taskDays, 'campo', today, start, to)
   const suggestions = suggestCampo([...all.missing, ...all.pending, ...extra], tasks, order, quirofano)
   const inRange = (d: string) => d >= from && d < to
   return { missing: all.missing.filter(inRange), pending: all.pending.filter(inRange), suggestions }
