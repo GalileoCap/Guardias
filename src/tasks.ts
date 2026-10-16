@@ -103,11 +103,14 @@ export function campoStart(tasks: Tasks, today: string, from: string): string {
   return [first ?? mondayOf(today), from].sort()[0]
 }
 
-/** `weeks` (lunes, en orden) extendidas hacia atrás hasta la semana donde empieza la cadena del Campo, para que el quirófano las cubra. */
+/**
+ * `weeks` (lunes, en orden) extendidas hacia atrás hasta una antes de donde empieza la cadena del Campo, para que el
+ * quirófano cubra esas semanas y también la anterior a la primera (de ahí sale la Curva).
+ */
 export function weeksFromCampoStart(tasks: Tasks, today: string, weeks: string[]): string[] {
   if (weeks.length === 0) return weeks
   const out: string[] = []
-  for (let w = mondayOf(campoStart(tasks, today, weeks[0])); w < weeks[0]; w = addDaysTo(w, 7)) out.push(w)
+  for (let w = addDaysTo(mondayOf(campoStart(tasks, today, weeks[0])), -7); w < weeks[0]; w = addDaysTo(w, 7)) out.push(w)
   return [...out, ...weeks]
 }
 
@@ -135,3 +138,13 @@ export function campoPlan(
 
 /** Quién viene preseleccionado para la Curva de `date`: quien tuvo quirófano la semana anterior a la de esa fecha. */
 export const curvaDefault = (quirofano: Quirofano, date: string): string | null => quirofano[addDaysTo(mondayOf(date), -7)] ?? null
+
+/** A quién recomendar para la Curva de cada fecha de `dates`: la persona de `curvaDefault`; sin quirofanero la semana anterior, la fecha no aparece. */
+export function suggestCurva(dates: string[], quirofano: Quirofano): Record<string, string> {
+  const out: Record<string, string> = {}
+  for (const date of dates) {
+    const id = curvaDefault(quirofano, date)
+    if (id) out[date] = id
+  }
+  return out
+}

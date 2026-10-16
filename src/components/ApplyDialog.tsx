@@ -60,11 +60,14 @@ function Summary({ title, score, base }: { title: string; score: Score; base: Sc
  */
 export default function ApplyDialog({
   data,
+  taskCount,
   onFillOnly,
   onReshuffle,
   onClose,
 }: {
   data: Reshuffle
+  /** Curvas y Campos recomendados que se anotan con cualquiera de las dos opciones */
+  taskCount: number
   onFillOnly: () => void
   onReshuffle: () => void
   onClose: () => void
@@ -100,8 +103,8 @@ export default function ApplyDialog({
           <button className="btn btn-sm btn-ghost" onClick={onClose}>
             Cancelar
           </button>
-          <button className="btn btn-sm" disabled={fillCount === 0} onClick={onFillOnly}>
-            Solo completar ({fillCount})
+          <button className="btn btn-sm" disabled={fillCount + taskCount === 0} onClick={onFillOnly}>
+            Solo completar ({fillCount + taskCount})
           </button>
           <button className="btn btn-sm btn-primary" onClick={onReshuffle}>
             Completar y reacomodar

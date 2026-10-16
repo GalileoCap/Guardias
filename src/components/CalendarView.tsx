@@ -7,7 +7,7 @@ import FullCalendar from '@fullcalendar/react'
 import { useCallback, useMemo, useRef, useState } from 'react'
 import { addDaysTo, isoOf, mondayOf } from '../dates'
 import { hasIssue, rankCandidates, rotationOrder, scoreShifts } from '../fairness'
-import { TASK_KINDS, campoPlan, taskGaps, weeksFromCampoStart } from '../tasks'
+import { TASK_KINDS, campoPlan, suggestCurva, taskGaps, weeksFromCampoStart } from '../tasks'
 import { suggestAssignments } from '../search'
 import { contrastText, useHolidayLookup, useProblems, useQuirofano } from '../hooks'
 import { useStore } from '../store'
@@ -139,7 +139,7 @@ export default function CalendarView({
       .map((date) => ({ date, from: peopleById.get(shifts[date]!)!, to: peopleById.get(full[date])! }))
     if (changes.length === 0) {
       setShifts(inMonth)
-      return applyCampo()
+      return applyTasks()
     }
     const reshuffleInMonth = Object.fromEntries(Object.entries(full).filter(([date]) => inVisibleMonth(date)))
     const score = (assignments: Record<string, string | null>) =>
@@ -154,33 +154,37 @@ export default function CalendarView({
     })
   }
 
-  // Lo que falta anotar de Curva y de Campo en lo que se ve del calendario, y lo que viene; para el Campo, también a quién
-  // recomendar en cada fecha
+  // Lo que falta anotar de Curva y de Campo en lo que se ve del calendario, y lo que viene, con la persona recomendada
+  // en cada fecha
   const taskGapsByKind = useMemo(() => {
     if (!range || !r1) return []
     const today = iso(new Date())
     const from = range.weeks[0]
     const to = addDaysTo(range.weeks[range.weeks.length - 1], 7)
     const order = rotationOrder(people, settings)
-    return TASK_KINDS.map((kind) => ({
-      kind,
-      ...(kind.key === 'campo'
-        ? campoPlan(tasks, taskDays, today, from, to, order, quirofano)
-        : { ...taskGaps(tasks, taskDays, kind.key, today, from, to), suggestions: {} as Record<string, string> }),
-    }))
+    return TASK_KINDS.map((kind) => {
+      if (kind.key === 'campo') return { kind, ...campoPlan(tasks, taskDays, today, from, to, order, quirofano) }
+      const gaps = taskGaps(tasks, taskDays, kind.key, today, from, to)
+      return { kind, ...gaps, suggestions: suggestCurva([...gaps.missing, ...gaps.pending], quirofano) }
+    })
   }, [r1, tasks, taskDays, range, people, settings, quirofano])
 
-  // El Campo recomendado de lo que falta y viene en el mes que se ve; va junto con las guardias
-  const campoInMonth = useMemo(() => {
-    const plan = taskGapsByKind.find((t) => t.kind.key === 'campo')
-    if (!plan) return {}
-    const dates = [...plan.missing, ...plan.pending].filter(inVisibleMonth)
-    return Object.fromEntries(dates.filter((d) => plan.suggestions[d]).map((d) => [d, plan.suggestions[d]]))
-  }, [taskGapsByKind, range])
-  const applyCampo = () => {
-    if (Object.keys(campoInMonth).length > 0) setTasks('campo', campoInMonth)
+  // La Curva y el Campo recomendados de lo que falta y viene en el mes que se ve; van junto con las guardias
+  const tasksInMonth = useMemo(
+    () =>
+      taskGapsByKind.map(({ kind, missing, pending, suggestions }) => ({
+        kind: kind.key,
+        assignments: Object.fromEntries(
+          [...missing, ...pending].filter((d) => inVisibleMonth(d) && suggestions[d]).map((d) => [d, suggestions[d]]),
+        ),
+      })),
+    [taskGapsByKind, range],
+  )
+  const applyTasks = () => {
+    for (const { kind, assignments } of tasksInMonth) if (Object.keys(assignments).length > 0) setTasks(kind, assignments)
   }
-  const applicableCount = Object.keys(inMonth).length + Object.keys(campoInMonth).length
+  const taskCount = tasksInMonth.reduce((n, t) => n + Object.keys(t.assignments).length, 0)
+  const applicableCount = Object.keys(inMonth).length + taskCount
 
   const events = useMemo<EventInput[]>(() => {
     const emphasis = (personId: string | null | undefined) =>
@@ -257,7 +261,7 @@ export default function CalendarView({
             isTask: true,
             order,
             task: { kind: kind.key, name: `${person.name}?` },
-            tip: `${lateNote}Recomendada para ${kind.label}: ${person.name}, la siguiente en el orden del quirófano. Tocá el día para anotarla.`,
+            tip: `${lateNote}Recomendada para ${kind.label}: ${person.name}, ${kind.key === 'curva' ? 'tuvo quirófano la semana anterior' : 'la siguiente en el orden del quirófano'}. Tocá el día para anotarla.`,
           },
         }
       }
@@ -469,15 +473,16 @@ export default function CalendarView({
       {reshuffle && (
         <ApplyDialog
           data={reshuffle}
+          taskCount={taskCount}
           onClose={() => setReshuffle(null)}
           onFillOnly={() => {
             setShifts(reshuffle.fillOnly)
-            applyCampo()
+            applyTasks()
             setReshuffle(null)
           }}
           onReshuffle={() => {
             setShifts(reshuffle.reshuffle)
-            applyCampo()
+            applyTasks()
             setReshuffle(null)
           }}
         />

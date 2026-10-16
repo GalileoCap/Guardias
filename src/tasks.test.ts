@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { campoPlan, curvaDefault, suggestCampo, taskGaps, taskWeekdays } from './tasks'
+import { campoPlan, curvaDefault, suggestCampo, suggestCurva, taskGaps, taskWeekdays } from './tasks'
 import type { TaskDays, Tasks } from './types'
 
 const t = (kind: 'curva' | 'campo', date: string, personId = 'ana') => ({ kind, date, personId })
@@ -240,5 +240,16 @@ describe('curvaDefault', () => {
   it('es null si la semana anterior no tiene quirofanero', () => {
     expect(curvaDefault(quirofano, '2026-10-07')).toBeNull()
     expect(curvaDefault(quirofano, '2026-10-26')).toBeNull()
+  })
+})
+
+describe('suggestCurva', () => {
+  it('recomienda a quien tuvo quirófano la semana anterior y omite las fechas sin quirofanero esa semana', () => {
+    const quirofano = { '2026-10-05': 'flor', '2026-10-12': 'ana' }
+    expect(suggestCurva(['2026-10-13', '2026-10-15', '2026-10-20', '2026-10-27'], quirofano)).toEqual({
+      '2026-10-13': 'flor',
+      '2026-10-15': 'flor',
+      '2026-10-20': 'ana',
+    })
   })
 })
