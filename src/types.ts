@@ -25,11 +25,13 @@ export type Tasks = Record<string, Task>
  */
 export type TaskDays = Record<string, number[]>
 
+export type Mode = 'r1' | 'r2'
+
 export type CustomHoliday = { date: string; name: string }
 
 export type Settings = {
-  /** Usar el quirófano (el quirofanero de cada semana). Se apaga en los grupos que no hacen quirofanismo (p. ej. R2) */
-  quirofanoEnabled: boolean
+  /** R1 lleva guardia, quirófano, Curva y Campo; R2+ solo la guardia (sin quirófano ni tareas) */
+  mode: Mode
   /** Orden fijo de rotación del quirófano (ids de personas); al final vuelve al primero */
   quirofanoOrder: string[]
   /** Usar feriados nacionales de Argentina (librería date-holidays) */

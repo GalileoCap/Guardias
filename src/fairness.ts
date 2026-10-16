@@ -638,7 +638,7 @@ export const effectiveQuirofano = memoLast(function effectiveQuirofano(
   settings: Settings,
   extraWeeks: string[] = [],
 ): Quirofano {
-  if (!settings.quirofanoEnabled) return NO_QUIROFANO
+  if (settings.mode !== 'r1') return NO_QUIROFANO
   const weeks = [...Object.keys(shifts).map(weekOf), ...extraWeeks].sort()
   if (weeks.length === 0) return quirofano
   const last = shiftWeek(weeks[weeks.length - 1], 7)

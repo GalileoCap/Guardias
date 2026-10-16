@@ -3,7 +3,7 @@
 import type { AppData, Person, Quirofano, Settings, Shifts, TaskDays, TaskKind, Tasks } from './types'
 
 export const defaultSettings: Settings = {
-  quirofanoEnabled: true,
+  mode: 'r1',
   quirofanoOrder: [],
   autoHolidays: true,
   customHolidays: [],
@@ -64,7 +64,8 @@ export function normalize(raw: unknown): AppData | null {
   }
   const s = obj(raw.settings)
   const settings: Settings = {
-    quirofanoEnabled: typeof s.quirofanoEnabled === 'boolean' ? s.quirofanoEnabled : defaultSettings.quirofanoEnabled,
+    // Lo guardado antes del selector de modo tenía el interruptor del quirófano: apagado era el grupo sin quirofanismo
+    mode: s.mode === 'r1' || s.mode === 'r2' ? s.mode : s.quirofanoEnabled === false ? 'r2' : defaultSettings.mode,
     quirofanoOrder: arr(s.quirofanoOrder).filter((x): x is string => typeof x === 'string'),
     autoHolidays: typeof s.autoHolidays === 'boolean' ? s.autoHolidays : defaultSettings.autoHolidays,
     customHolidays: arr(s.customHolidays)

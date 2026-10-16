@@ -81,6 +81,7 @@ export default function CalendarView({
   onHighlight: (id: string | null) => void
 }) {
   const { people, shifts, quirofano: manualQuirofano, tasks, taskDays, settings, setShift, setShifts, removeShift } = useStore()
+  const r1 = settings.mode === 'r1' // quirófano, Curva y Campo solo en R1
   const holiday = useHolidayLookup()
   const [mode, setMode] = useState<Mode>('assign')
   const [openDate, setOpenDate] = useState<string | null>(null)
@@ -152,7 +153,7 @@ export default function CalendarView({
   // Lo que falta anotar de Curva y de Campo en lo que se ve del calendario, y lo que viene; para el Campo, también a quién
   // recomendar en cada fecha
   const taskGapsByKind = useMemo(() => {
-    if (!range) return []
+    if (!range || !r1) return []
     const today = iso(new Date())
     const from = range.weeks[0]
     const to = addDaysTo(range.weeks[range.weeks.length - 1], 7)
@@ -163,7 +164,7 @@ export default function CalendarView({
         ? campoPlan(tasks, taskDays, today, from, to, order, quirofano)
         : { ...taskGaps(tasks, taskDays, kind.key, today, from, to), suggestions: {} as Record<string, string> }),
     }))
-  }, [tasks, taskDays, range, people, settings, quirofano])
+  }, [r1, tasks, taskDays, range, people, settings, quirofano])
 
   const events = useMemo<EventInput[]>(() => {
     const emphasis = (personId: string | null | undefined) =>
@@ -203,7 +204,7 @@ export default function CalendarView({
         extendedProps: { date, order: 0, tip: `Recomendada: ${person.name}. Tocá el día para elegir a otra persona.` },
       }
     })
-    const done = Object.values(tasks).flatMap((t): EventInput[] => {
+    const done = (r1 ? Object.values(tasks) : []).flatMap((t): EventInput[] => {
       const person = peopleById.get(t.personId)
       const index = TASK_KINDS.findIndex((k) => k.key === t.kind)
       if (!person || index < 0) return []
@@ -263,7 +264,7 @@ export default function CalendarView({
       ...pending.map((date) => gapEvent(kind, index, date, false, suggestions[date])),
     ])
     return [...real, ...ghosts, ...done, ...gaps]
-  }, [shifts, suggestions, tasks, taskGapsByKind, peopleById, highlightId, problems, showProblems, unavoidable])
+  }, [shifts, suggestions, r1, tasks, taskGapsByKind, peopleById, highlightId, problems, showProblems, unavoidable])
 
   // FullCalendar vuelve a dibujar todo si alguna de sus funciones cambia de identidad: las que dependen del estado
   // llaman a la versión más reciente por una ref, y las demás se memorizan.
@@ -369,10 +370,10 @@ export default function CalendarView({
           {mode === 'assign' ? (
             <>
               <span className="sm:hidden">
-                {settings.quirofanoEnabled ? 'Tocá un día para asignarlo, o el quirofanero de la izquierda.' : 'Tocá un día para asignarlo.'}
+                {r1 ? 'Tocá un día para asignarlo, o el quirofanero de la izquierda.' : 'Tocá un día para asignarlo.'}
               </span>
               <span className="hidden sm:inline">
-                {settings.quirofanoEnabled
+                {r1
                   ? 'Tocá un día para asignarlo, o el quirofanero de la izquierda para cambiarlo. '
                   : 'Tocá un día para asignarlo. '}
                 Tocá una persona de abajo para resaltar sus guardias.
@@ -399,22 +400,23 @@ export default function CalendarView({
           <Icon name="guardia" className="size-3.5" />
           Guardia
         </span>
-        {settings.quirofanoEnabled && (
+        {r1 && (
           <span className="flex items-center gap-1">
             <Icon name="quirofano" className="size-3.5" />
             Quirófano
           </span>
         )}
-        {TASK_KINDS.map((k) => (
-          <span key={k.key} className="flex items-center gap-1">
-            <Icon name={k.key} className="size-3.5" />
-            {k.label}
-          </span>
-        ))}
+        {r1 &&
+          TASK_KINDS.map((k) => (
+            <span key={k.key} className="flex items-center gap-1">
+              <Icon name={k.key} className="size-3.5" />
+              {k.label}
+            </span>
+          ))}
       </div>
 
-      <div ref={cardRef} className={`cal-card card card-border bg-base-100 relative ${settings.quirofanoEnabled ? '' : 'no-gutter'}`}>
-        {settings.quirofanoEnabled && (
+      <div ref={cardRef} className={`cal-card card card-border bg-base-100 relative ${r1 ? '' : 'no-gutter'}`}>
+        {r1 && (
           <WeekGutter
             containerRef={cardRef}
             assigned={quirofano}
@@ -462,7 +464,7 @@ export default function CalendarView({
           }}
         />
       )}
-      {openWeek && settings.quirofanoEnabled && <QuirofanoDialog week={openWeek} onClose={() => setOpenWeek(null)} />}
+      {openWeek && r1 && <QuirofanoDialog week={openWeek} onClose={() => setOpenWeek(null)} />}
     </div>
   )
 }

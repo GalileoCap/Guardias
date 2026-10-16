@@ -5,6 +5,7 @@ import { GROUP } from '../group'
 import { useStore } from '../store'
 import { createGroup } from '../sync'
 import { TASK_KINDS, taskWeekdays } from '../tasks'
+import type { Mode } from '../types'
 import Icon, { type IconName } from './Icon'
 
 export default function SettingsView() {
@@ -12,6 +13,7 @@ export default function SettingsView() {
     <div className="grid gap-4 lg:grid-cols-2">
       <PeopleCard />
       <div className="flex flex-col gap-4">
+        <ModeCard />
         <QuirofanoCard />
         <RulesCard />
         <TaskDaysCard />
@@ -106,6 +108,35 @@ function PeopleCard() {
   )
 }
 
+const MODES: { key: Mode; label: string }[] = [
+  { key: 'r1', label: 'R1: guardia, quirófano, curva y campo' },
+  { key: 'r2', label: 'R2+: solo guardia' },
+]
+
+function ModeCard() {
+  const { settings, updateSettings } = useStore()
+  return (
+    <Card
+      title="Modo"
+      icon="guardia"
+      hint="Lo que lleva el grupo. En R2+ el calendario no muestra quirófano, Curva ni Campo, y las guardias se reparten sin tener en cuenta el quirófano. Lo ya cargado se conserva por si volvés a R1."
+    >
+      <select
+        className="select select-sm w-full"
+        aria-label="Modo"
+        value={settings.mode}
+        onChange={(e) => updateSettings({ mode: e.target.value as Mode })}
+      >
+        {MODES.map((m) => (
+          <option key={m.key} value={m.key}>
+            {m.label}
+          </option>
+        ))}
+      </select>
+    </Card>
+  )
+}
+
 function QuirofanoCard() {
   const { people, settings, updateSettings } = useStore()
   const byId = new Map(people.map((p) => [p.id, p]))
@@ -121,29 +152,7 @@ function QuirofanoCard() {
     setOrder(next)
   }
 
-  const toggle = (
-    <label className="flex cursor-pointer items-center gap-3 text-sm">
-      <input
-        type="checkbox"
-        className="toggle toggle-primary toggle-sm"
-        checked={settings.quirofanoEnabled}
-        onChange={(e) => updateSettings({ quirofanoEnabled: e.target.checked })}
-      />
-      <span className="font-medium">Usar quirófano</span>
-    </label>
-  )
-
-  if (!settings.quirofanoEnabled) {
-    return (
-      <Card
-        title="Quirófano"
-        icon="quirofano"
-        hint="Apagado: el calendario no muestra al quirofanero y las guardias se reparten sin tener en cuenta ninguna semana de quirófano. Lo ya cargado se conserva por si lo volvés a prender."
-      >
-        {toggle}
-      </Card>
-    )
-  }
+  if (settings.mode !== 'r1') return null
 
   return (
     <Card
@@ -151,7 +160,6 @@ function QuirofanoCard() {
       icon="quirofano"
       hint="Cada semana le toca a la persona siguiente de la lista; al llegar al final vuelve a la primera. El calendario completa solo el quirófano con este orden: si fijás a alguien a mano en una semana, las siguientes siguen desde ahí."
     >
-      {toggle}
       {order.length === 0 ? (
         <div className="flex items-center gap-2 text-sm">
           <span className="text-base-content/60">Sin orden definido: se rota por el orden de la lista de personas.</span>
@@ -263,9 +271,10 @@ const shiftMonth = (month: string, by: number) => {
 }
 
 function TaskDaysCard() {
-  const { taskDays, setTaskDays } = useStore()
+  const { taskDays, settings, setTaskDays } = useStore()
   const [month, setMonth] = useState(isoOf(new Date()).slice(0, 7))
   const label = new Date(`${month}-01T00:00:00Z`).toLocaleDateString('es', { month: 'long', year: 'numeric', timeZone: 'UTC' })
+  if (settings.mode !== 'r1') return null
 
   return (
     <Card title="Días de Curva y Campo" hint="Los días de la semana en que toca cada una. Cambian de un mes a otro: un mes sin elegir queda igual que el anterior.">

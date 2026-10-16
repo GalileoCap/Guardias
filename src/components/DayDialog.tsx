@@ -218,11 +218,13 @@ export default function DayDialog({ date, onClose }: { date: string; onClose: ()
         </ul>
         <p className="mt-1 text-xs text-base-content/50">Los números no cuentan esta fecha.</p>
 
-        <div className="mt-4 border-t border-base-300 pt-3">
-          {TASK_KINDS.map((k) => (
-            <TaskRow key={k.key} kind={k.key} label={k.label} date={date} />
-          ))}
-        </div>
+        {settings.mode === 'r1' && (
+          <div className="mt-4 border-t border-base-300 pt-3">
+            {TASK_KINDS.map((k) => (
+              <TaskRow key={k.key} kind={k.key} label={k.label} date={date} />
+            ))}
+          </div>
+        )}
 
         <div className="modal-action flex-wrap justify-between gap-2">
           <div className="flex gap-2">

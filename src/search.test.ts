@@ -32,7 +32,7 @@ const pick = <T>(rand: Rng, items: readonly T[]): T => at(items, int(rand, items
 const person = (id: string, active = true): Person => ({ id, name: id.toUpperCase(), color: '#888888', active });
 
 const baseSettings: Settings = {
-  quirofanoEnabled: false,
+  mode: 'r2',
   quirofanoOrder: [],
   autoHolidays: false,
   customHolidays: [],
@@ -108,7 +108,7 @@ const makeInstance = (rand: Rng, groupSize: number, config: Config): Instance =>
 
   const settings: Settings = {
     ...baseSettings,
-    quirofanoEnabled: config.quirofano !== 'off',
+    mode: config.quirofano !== 'off' ? 'r1' : 'r2',
     countFrom: config.countFrom ? addDaysTo(start, int(rand, 15)) : null,
   };
   return { active, shifts, quirofano, settings, holiday, free, config };

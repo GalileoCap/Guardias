@@ -172,3 +172,30 @@ describe('días fijos de Curva y Campo', () => {
     expect(diff(a, b)).toEqual({ taskDays: { set: { 'curva:2026-10': [4] }, del: [] } })
   })
 })
+
+describe('modo del grupo', () => {
+  const normalized = (settings: unknown) => normalize({ people: [], shifts: {}, settings })?.settings
+  const modeOf = (settings: unknown) => normalized(settings)?.mode
+
+  it('por defecto es R1', () => {
+    expect(defaultSettings.mode).toBe('r1')
+    expect(modeOf({})).toBe('r1')
+  })
+
+  it('acepta r1 y r2 y descarta cualquier otro valor', () => {
+    expect(modeOf({ mode: 'r2' })).toBe('r2')
+    expect(modeOf({ mode: 'r1' })).toBe('r1')
+    expect(modeOf({ mode: 'r3' })).toBe('r1')
+    expect(modeOf({ mode: true })).toBe('r1')
+  })
+
+  it('lo guardado con el interruptor viejo del quirófano se migra: apagado es R2, prendido es R1', () => {
+    expect(modeOf({ quirofanoEnabled: false })).toBe('r2')
+    expect(modeOf({ quirofanoEnabled: true })).toBe('r1')
+  })
+
+  it('el modo explícito gana sobre el interruptor viejo y este no queda en los ajustes', () => {
+    expect(modeOf({ mode: 'r1', quirofanoEnabled: false })).toBe('r1')
+    expect(normalized({ quirofanoEnabled: false })).not.toHaveProperty('quirofanoEnabled')
+  })
+})

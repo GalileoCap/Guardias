@@ -87,12 +87,13 @@ export const useStore = create<AppData & Actions>()(
       // en un grupo compartido, esto es solo la copia local (sin conexión) de los datos del servidor
       name: GROUP ? `guardias-g-${GROUP}` : 'guardias-v1',
       version: 1,
-      // merge profundo de settings: así los ajustes nuevos toman su valor por defecto con datos viejos
+      // los ajustes pasan por normalize: los nuevos toman su valor por defecto con datos viejos
       merge: (persisted, current) => {
         const p = (persisted ?? {}) as Partial<AppData>
         // lo guardado antes de que las tareas fueran una por día tiene otras claves: se vuelven a armar
-        const tasks = normalize({ people: [], shifts: {}, tasks: p.tasks })?.tasks ?? {}
-        return { ...current, ...p, tasks, settings: { ...current.settings, ...p.settings } }
+        // y los ajustes viejos (el interruptor del quirófano) se migran al modo
+        const clean = normalize({ people: [], shifts: {}, tasks: p.tasks, settings: p.settings })
+        return { ...current, ...p, tasks: clean?.tasks ?? {}, settings: clean?.settings ?? current.settings }
       },
       partialize: ({ people, shifts, quirofano, tasks, taskDays, settings }) => ({ people, shifts, quirofano, tasks, taskDays, settings }),
     },

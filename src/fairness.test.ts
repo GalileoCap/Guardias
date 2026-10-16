@@ -25,7 +25,7 @@ const D = person('d');
 const inactive = person('x', false);
 
 const settings: Settings = {
-  quirofanoEnabled: false,
+  mode: 'r2',
   quirofanoOrder: [],
   autoHolidays: false,
   customHolidays: [],
@@ -253,7 +253,7 @@ describe('rankCandidates', () => {
 
 describe('rotación del quirófano', () => {
   const people = [A, B, C, D];
-  const withOrder = (quirofanoOrder: string[]): Settings => ({ ...settings, quirofanoEnabled: true, quirofanoOrder });
+  const withOrder = (quirofanoOrder: string[]): Settings => ({ ...settings, mode: 'r1', quirofanoOrder });
 
   describe('rotationOrder', () => {
     it('conserva el orden configurado y saca a quienes están inactivos', () => {
