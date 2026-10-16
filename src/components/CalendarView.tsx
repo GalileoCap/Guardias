@@ -7,7 +7,7 @@ import FullCalendar from '@fullcalendar/react'
 import { useCallback, useMemo, useRef, useState } from 'react'
 import { addDaysTo, isoOf, mondayOf } from '../dates'
 import { hasIssue, rankCandidates, scoreShifts } from '../fairness'
-import { TASK_KINDS, missingTaskWeeks } from '../tasks'
+import { TASK_KINDS, taskGaps } from '../tasks'
 import { suggestAssignments } from '../search'
 import { contrastText, useHolidayLookup, useProblems, useQuirofano } from '../hooks'
 import { useStore } from '../store'
@@ -75,7 +75,7 @@ export default function CalendarView({
   highlightId: string | null
   onHighlight: (id: string | null) => void
 }) {
-  const { people, shifts, quirofano: manualQuirofano, tasks, settings, setShift, setShifts, removeShift } = useStore()
+  const { people, shifts, quirofano: manualQuirofano, tasks, taskDays, settings, setShift, setShifts, removeShift } = useStore()
   const holiday = useHolidayLookup()
   const [mode, setMode] = useState<Mode>('assign')
   const [openDate, setOpenDate] = useState<string | null>(null)
@@ -144,11 +144,14 @@ export default function CalendarView({
     })
   }
 
-  // Semanas terminadas sin Curva o sin Campo (lunes de cada una)
-  const missingTasks = useMemo(() => {
+  // Lo que falta anotar de Curva y de Campo en lo que se ve del calendario, y lo que viene
+  const taskGapsByKind = useMemo(() => {
+    if (!range) return []
     const today = iso(new Date())
-    return TASK_KINDS.map((kind) => ({ kind, weeks: missingTaskWeeks(tasks, kind.key, today) }))
-  }, [tasks])
+    const from = range.weeks[0]
+    const to = addDaysTo(range.weeks[range.weeks.length - 1], 7)
+    return TASK_KINDS.map((kind) => ({ kind, ...taskGaps(tasks, taskDays, kind.key, today, from, to) }))
+  }, [tasks, taskDays, range])
 
   const events = useMemo<EventInput[]>(() => {
     const emphasis = (personId: string | null | undefined) =>
@@ -206,25 +209,40 @@ export default function CalendarView({
         },
       ]
     })
-    const missing = missingTasks.flatMap(({ kind, weeks }, index) =>
-      weeks.map(
-        (week): EventInput => ({
-          start: week,
+    const gaps = taskGapsByKind.flatMap(({ kind, missing, pending }, index) => [
+      ...missing.map(
+        (date): EventInput => ({
+          start: date,
           allDay: true,
           title: `Falta ${kind.label}`,
           classNames: ['task-missing'],
           extendedProps: {
-            date: week,
+            date,
             isTask: true,
             order: 2 + index * 2,
             task: { label: `Falta ${kind.label}`, short: `Falta ${kind.short}` },
-            tip: `Esta semana no tiene ${kind.label}. Tocá el día para anotarla.`,
+            tip: `Falta anotar la ${kind.label}. Tocá el día para anotarla.`,
           },
         }),
       ),
-    )
-    return [...real, ...ghosts, ...done, ...missing]
-  }, [shifts, suggestions, tasks, missingTasks, peopleById, highlightId, problems, showProblems, unavoidable])
+      ...pending.map(
+        (date): EventInput => ({
+          start: date,
+          allDay: true,
+          title: kind.label,
+          classNames: ['task-pending'],
+          extendedProps: {
+            date,
+            isTask: true,
+            order: 2 + index * 2,
+            task: { label: kind.label, short: kind.short },
+            tip: `Toca ${kind.label} este día. Tocá el día para anotarla.`,
+          },
+        }),
+      ),
+    ])
+    return [...real, ...ghosts, ...done, ...gaps]
+  }, [shifts, suggestions, tasks, taskGapsByKind, peopleById, highlightId, problems, showProblems, unavoidable])
 
   // FullCalendar vuelve a dibujar todo si alguna de sus funciones cambia de identidad: las que dependen del estado
   // llaman a la versión más reciente por una ref, y las demás se memorizan.

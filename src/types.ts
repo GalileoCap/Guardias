@@ -19,6 +19,12 @@ export type Task = { kind: TaskKind; date: string; personId: string }
 /** id de la anotación -> anotación */
 export type Tasks = Record<string, Task>
 
+/**
+ * Días de la semana (0 = domingo … 6 = sábado) en que toca cada tarea, por mes: 'curva:2026-10' -> [2, 4].
+ * Un mes sin clave hereda del último mes anterior que la tenga; una lista vacía es explícita ("este mes no toca").
+ */
+export type TaskDays = Record<string, number[]>
+
 export type CustomHoliday = { date: string; name: string }
 
 export type Settings = {
@@ -38,5 +44,6 @@ export type AppData = {
   shifts: Shifts
   quirofano: Quirofano
   tasks: Tasks
+  taskDays: TaskDays
   settings: Settings
 }

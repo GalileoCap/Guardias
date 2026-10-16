@@ -133,6 +133,16 @@ body::before {
 .fc .fc-event.task-missing,
 .fc .fc-event.task-missing .fc-event-main,
 .fc .fc-event.task-missing .fc-event-title { color: var(--color-error); }
+/* Día en que toca y todavía no llegó: solo marca el lugar */
+.fc .fc-event.task-pending {
+  font-size: 0.7rem;
+  padding: 0 8px;
+  background: transparent;
+  border: 1px dashed color-mix(in oklab, var(--color-base-content) 35%, transparent);
+}
+.fc .fc-event.task-pending,
+.fc .fc-event.task-pending .fc-event-main,
+.fc .fc-event.task-pending .fc-event-title { color: color-mix(in oklab, var(--color-base-content) 60%, transparent); }
 
 .fc .fc-event.dimmed { opacity: 0.18; }
 .fc .fc-event.highlighted {
@@ -163,7 +173,7 @@ body::before {
   .fc .fc-daygrid-day-number { font-size: 0.78rem; padding: 2px 4px; }
   .fc .fc-day-today .fc-daygrid-day-number { margin: 2px; padding: 0 5px; }
   .fc .fc-event { font-size: 0.66rem; padding: 1px 2px; text-align: center; }
-  .fc .fc-event.task, .fc .fc-event.task-missing { font-size: 0.58rem; padding: 0 2px; }
+  .fc .fc-event.task, .fc .fc-event.task-missing, .fc .fc-event.task-pending { font-size: 0.58rem; padding: 0 2px; }
   .fc .fc-daygrid-event { margin-inline: 2px; }
 }
 

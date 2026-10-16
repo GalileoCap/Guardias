@@ -1,11 +1,11 @@
 import { format, parseISO } from 'date-fns'
 import { es } from 'date-fns/locale'
 import { useMemo, useState } from 'react'
-import { isoOf, mondayOf } from '../dates'
+import { addDaysTo, isoOf, mondayOf } from '../dates'
 import { CATEGORIES, categoriesOf, hasIssue, rankCandidates } from '../fairness'
 import { useHolidayLookup, useIgnoreGhostClick, useProblems, useQuirofano } from '../hooks'
 import { useStore } from '../store'
-import { TASK_KINDS, curvaDefault, missingTaskWeeks } from '../tasks'
+import { TASK_KINDS, curvaDefault, taskGaps } from '../tasks'
 import type { TaskKind } from '../types'
 
 const days = (n: number) => (n === 1 ? '1 día' : `${n} días`)
@@ -17,7 +17,7 @@ function nearestLabel(before: number | null, after: number | null) {
 
 /** Anotaciones de una tarea (Curva o Campo) en el día: quién la hizo, y agregar o quitar. No cuentan en la justicia. */
 function TaskRow({ kind, label, date }: { kind: TaskKind; label: string; date: string }) {
-  const { people, tasks, addTask, removeTask } = useStore()
+  const { people, tasks, taskDays, addTask, removeTask } = useStore()
   const quirofano = useQuirofano()
   const peopleById = useMemo(() => new Map(people.map((p) => [p.id, p])), [people])
   const active = people.filter((p) => p.active)
@@ -25,16 +25,18 @@ function TaskRow({ kind, label, date }: { kind: TaskKind; label: string; date: s
   const suggested = kind === 'curva' ? curvaDefault(quirofano, date) : null
   const [picked, setPicked] = useState(active.some((p) => p.id === suggested) ? suggested! : '')
   const entries = Object.entries(tasks).filter(([, t]) => t.kind === kind && t.date === date)
-  const missing = useMemo(
-    () => missingTaskWeeks(tasks, kind, isoOf(new Date())).includes(mondayOf(date)),
-    [tasks, kind, date],
-  )
+  // Lo que falta en la semana de este día y si hoy toca
+  const gaps = useMemo(() => {
+    const monday = mondayOf(date)
+    return taskGaps(tasks, taskDays, kind, isoOf(new Date()), monday, addDaysTo(monday, 7))
+  }, [tasks, taskDays, kind, date])
 
   return (
     <div className="mt-2">
       <div className="flex flex-wrap items-center gap-2">
         <span className="text-sm font-semibold">{label}</span>
-        {missing && <span className="badge badge-error badge-soft badge-sm">falta esta semana</span>}
+        {gaps.missing.length > 0 && <span className="badge badge-error badge-soft badge-sm">falta esta semana</span>}
+        {gaps.pending.includes(date) && <span className="badge badge-ghost badge-sm">toca este día</span>}
         {entries.map(([id, t]) => {
           const person = peopleById.get(t.personId)
           return (

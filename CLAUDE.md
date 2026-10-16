@@ -13,7 +13,7 @@ Las reglas globales de `~/.claude/CLAUDE.md` rigen acá. Lo que sigue las comple
 ## Justicia y recomendaciones
 
 - `src/fairness.ts` define el puntaje (`scoreShifts`, `compareScores`) y `src/search.ts` lo maximiza con un evaluador incremental sobre arreglos tipados. Los dos tienen que dar exactamente el mismo puntaje para cualquier calendario. Quien cambie una categoría, un peso o el orden de comparación en uno cambia el otro en el mismo commit. El test diferencial de `src/search.test.ts` (200 calendarios aleatorios para grupos de 3 y de 4) lo comprueba.
-- Curva y Campo (`tasks`, `src/tasks.ts`) son solo un registro: ni `fairness.ts` ni `search.ts` las leen y no hay autoasignación. La Curva solo viene preseleccionada en el diálogo del día con quien tuvo quirófano la semana anterior.
+- Curva y Campo (`tasks`, `taskDays`, `src/tasks.ts`) son solo un registro: ni `fairness.ts` ni `search.ts` las leen y no hay autoasignación. La Curva solo viene preseleccionada en el diálogo del día con quien tuvo quirófano la semana anterior. Los días de la semana en que toca cada una se eligen por mes en Configuración y un mes sin elegir hereda del anterior; `taskGaps` deriva de ahí lo que falta y lo que viene.
 - Los datos viven en `localStorage` bajo `guardias-v1` (zustand persist) y, con `?group=`, en el servidor. Un cambio en la forma de lo guardado necesita migración.
 
 ## Deploy

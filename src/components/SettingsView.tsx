@@ -4,6 +4,7 @@ import { addDaysTo, isoOf } from '../dates'
 import { GROUP } from '../group'
 import { useStore } from '../store'
 import { createGroup } from '../sync'
+import { TASK_KINDS, taskWeekdays } from '../tasks'
 import Icon from './Icon'
 
 export default function SettingsView() {
@@ -13,6 +14,7 @@ export default function SettingsView() {
       <div className="flex flex-col gap-4">
         <QuirofanoCard />
         <RulesCard />
+        <TaskDaysCard />
         <HolidaysCard />
         <DataCard />
       </div>
@@ -239,6 +241,74 @@ function RulesCard() {
   )
 }
 
+// De lunes a domingo; el número es el día de la semana (0 = domingo)
+const WEEKDAYS = [
+  { day: 1, letter: 'L', name: 'lunes' },
+  { day: 2, letter: 'M', name: 'martes' },
+  { day: 3, letter: 'X', name: 'miércoles' },
+  { day: 4, letter: 'J', name: 'jueves' },
+  { day: 5, letter: 'V', name: 'viernes' },
+  { day: 6, letter: 'S', name: 'sábado' },
+  { day: 0, letter: 'D', name: 'domingo' },
+]
+
+const shiftMonth = (month: string, by: number) => {
+  const d = new Date(Date.UTC(+month.slice(0, 4), +month.slice(5, 7) - 1 + by, 1))
+  return d.toISOString().slice(0, 7)
+}
+
+function TaskDaysCard() {
+  const { taskDays, setTaskDays } = useStore()
+  const [month, setMonth] = useState(isoOf(new Date()).slice(0, 7))
+  const label = new Date(`${month}-01T00:00:00Z`).toLocaleDateString('es', { month: 'long', year: 'numeric', timeZone: 'UTC' })
+
+  return (
+    <Card title="Días de Curva y Campo" hint="Los días de la semana en que toca cada una. Cambian de un mes a otro: un mes sin elegir queda igual que el anterior.">
+      <div className="flex items-center gap-2">
+        <button className="btn btn-sm btn-ghost btn-circle" aria-label="Mes anterior" onClick={() => setMonth(shiftMonth(month, -1))}>
+          <Icon name="left" />
+        </button>
+        <span className="min-w-36 text-center font-semibold first-letter:uppercase">{label}</span>
+        <button className="btn btn-sm btn-ghost btn-circle" aria-label="Mes siguiente" onClick={() => setMonth(shiftMonth(month, 1))}>
+          <Icon name="right" />
+        </button>
+      </div>
+      {TASK_KINDS.map(({ key, label: kindLabel }) => {
+        const days = taskWeekdays(taskDays, key, month)
+        const own = `${key}:${month}` in taskDays
+        return (
+          <div key={key} className="flex flex-col gap-1">
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="w-14 text-sm font-semibold">{kindLabel}</span>
+              <div className="join">
+                {WEEKDAYS.map(({ day, letter, name }) => (
+                  <button
+                    key={day}
+                    className={`btn btn-sm join-item w-9 px-0 ${days.includes(day) ? 'btn-primary' : ''}`}
+                    aria-pressed={days.includes(day)}
+                    aria-label={`${kindLabel} los ${name}`}
+                    title={name}
+                    onClick={() => setTaskDays(key, month, days.includes(day) ? days.filter((d) => d !== day) : [...days, day])}
+                  >
+                    {letter}
+                  </button>
+                ))}
+              </div>
+              {own ? (
+                <button className="btn btn-ghost btn-xs" onClick={() => setTaskDays(key, month, null)}>
+                  Copiar el mes anterior
+                </button>
+              ) : (
+                <span className="text-xs text-base-content/60">{days.length ? 'igual que el mes anterior' : 'sin días'}</span>
+              )}
+            </div>
+          </div>
+        )
+      })}
+    </Card>
+  )
+}
+
 function HolidaysCard() {
   const { settings, updateSettings } = useStore()
   const [date, setDate] = useState('')
@@ -291,11 +361,11 @@ function HolidaysCard() {
 }
 
 function DataCard() {
-  const { people, shifts, quirofano, tasks, settings, importData, reset } = useStore()
+  const { people, shifts, quirofano, tasks, taskDays, settings, importData, reset } = useStore()
   const fileRef = useRef<HTMLInputElement>(null)
 
   const exportJson = () => {
-    const blob = new Blob([JSON.stringify({ people, shifts, quirofano, tasks, settings }, null, 2)], { type: 'application/json' })
+    const blob = new Blob([JSON.stringify({ people, shifts, quirofano, tasks, taskDays, settings }, null, 2)], { type: 'application/json' })
     const a = document.createElement('a')
     a.href = URL.createObjectURL(blob)
     a.download = `guardias-${new Date().toISOString().slice(0, 10)}.json`
@@ -315,7 +385,7 @@ function DataCard() {
   const share = async () => {
     if (!confirm('Se crea un grupo en el servidor con los datos actuales y pasás a trabajar ahí. Cualquiera que tenga el enlace podrá editarlo. ¿Seguir?')) return
     try {
-      const url = await createGroup({ people, shifts, quirofano, tasks, settings })
+      const url = await createGroup({ people, shifts, quirofano, tasks, taskDays, settings })
       location.href = url
     } catch (e) {
       alert(`No pude crear el grupo. ${e instanceof Error ? e.message : ''}`)

@@ -25,6 +25,8 @@ type Actions = {
   /** Anota que `personId` hizo la tarea el día `date`. Puede haber varias el mismo día. */
   addTask: (kind: TaskKind, date: string, personId: string) => void
   removeTask: (id: string) => void
+  /** Días de la semana en que toca la tarea en `month` ('YYYY-MM'). null = sin configuración propia: hereda del mes anterior */
+  setTaskDays: (kind: TaskKind, month: string, days: number[] | null) => void
   updateSettings: (patch: Partial<Settings>) => void
   importData: (data: AppData) => void
   reset: () => void
@@ -37,6 +39,7 @@ export const useStore = create<AppData & Actions>()(
       shifts: {},
       quirofano: {},
       tasks: {},
+      taskDays: {},
       settings: defaultSettings,
 
       addPerson: (name) =>
@@ -71,9 +74,14 @@ export const useStore = create<AppData & Actions>()(
           const { [id]: _, ...rest } = s.tasks
           return { tasks: rest }
         }),
+      setTaskDays: (kind, month, days) =>
+        set((s) => {
+          const { [`${kind}:${month}`]: _, ...rest } = s.taskDays
+          return { taskDays: days ? { ...rest, [`${kind}:${month}`]: [...days].sort((a, b) => a - b) } : rest }
+        }),
       updateSettings: (patch) => set((s) => ({ settings: { ...s.settings, ...patch } })),
-      importData: (data) => set({ people: data.people, shifts: data.shifts, quirofano: data.quirofano ?? {}, tasks: data.tasks ?? {}, settings: { ...defaultSettings, ...data.settings } }),
-      reset: () => set({ people: [], shifts: {}, quirofano: {}, tasks: {}, settings: defaultSettings }),
+      importData: (data) => set({ people: data.people, shifts: data.shifts, quirofano: data.quirofano ?? {}, tasks: data.tasks ?? {}, taskDays: data.taskDays ?? {}, settings: { ...defaultSettings, ...data.settings } }),
+      reset: () => set({ people: [], shifts: {}, quirofano: {}, tasks: {}, taskDays: {}, settings: defaultSettings }),
     }),
     {
       // en un grupo compartido, esto es solo la copia local (sin conexión) de los datos del servidor
@@ -84,7 +92,7 @@ export const useStore = create<AppData & Actions>()(
         const p = (persisted ?? {}) as Partial<AppData>
         return { ...current, ...p, settings: { ...current.settings, ...p.settings } }
       },
-      partialize: ({ people, shifts, quirofano, tasks, settings }) => ({ people, shifts, quirofano, tasks, settings }),
+      partialize: ({ people, shifts, quirofano, tasks, taskDays, settings }) => ({ people, shifts, quirofano, tasks, taskDays, settings }),
     },
   ),
 )

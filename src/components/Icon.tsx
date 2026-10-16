@@ -23,6 +23,8 @@ const PATHS = {
   close: <path d="M18 6 6 18M6 6l12 12" />,
   up: <path d="m18 15-6-6-6 6" />,
   down: <path d="m6 9 6 6 6-6" />,
+  left: <path d="m15 18-6-6 6-6" />,
+  right: <path d="m9 18 6-6-6-6" />,
   arrowUp: <path d="m5 12 7-7 7 7M12 19V5" />,
   arrowDown: <path d="M12 5v14M19 12l-7 7-7-7" />,
 } as const

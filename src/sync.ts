@@ -21,8 +21,8 @@ const POLL_MS = 60_000
 const PUSH_DELAY_MS = 700
 
 const snap = (): AppData => {
-  const { people, shifts, quirofano, tasks, settings } = useStore.getState()
-  return { people, shifts, quirofano, tasks, settings }
+  const { people, shifts, quirofano, tasks, taskDays, settings } = useStore.getState()
+  return { people, shifts, quirofano, tasks, taskDays, settings }
 }
 
 type SyncState = { rev: number; base: AppData }

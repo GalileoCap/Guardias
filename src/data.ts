@@ -1,6 +1,6 @@
 // Lógica de datos compartida entre el cliente y el servidor (server/index.mjs la importa tal cual,
 // Node ≥ 22.18 ejecuta TypeScript borrando los tipos). Solo sintaxis "borrable": nada de enums ni imports de paquetes.
-import type { AppData, Person, Quirofano, Settings, Shifts, Tasks } from './types'
+import type { AppData, Person, Quirofano, Settings, Shifts, TaskDays, Tasks } from './types'
 
 export const defaultSettings: Settings = {
   quirofanoEnabled: true,
@@ -10,7 +10,7 @@ export const defaultSettings: Settings = {
   countFrom: null,
 }
 
-export const emptyData = (): AppData => ({ people: [], shifts: {}, quirofano: {}, tasks: {}, settings: { ...defaultSettings } })
+export const emptyData = (): AppData => ({ people: [], shifts: {}, quirofano: {}, tasks: {}, taskDays: {}, settings: { ...defaultSettings } })
 
 /** Cambios entre dos versiones. Se aplican por clave (no pisan lo que otra persona cambió en otro día/persona). */
 export type Patch = {
@@ -18,6 +18,7 @@ export type Patch = {
   shifts?: { set: Shifts; del: string[] }
   quirofano?: { set: Quirofano; del: string[] }
   tasks?: { set: Tasks; del: string[] }
+  taskDays?: { set: TaskDays; del: string[] }
   settings?: Partial<Settings>
 }
 
@@ -27,6 +28,7 @@ const isObj = (v: unknown): v is Obj => typeof v === 'object' && v !== null && !
 const obj = (v: unknown): Obj => (isObj(v) ? v : {})
 const arr = (v: unknown): unknown[] => (Array.isArray(v) ? v : [])
 const DATE = /^\d{4}-\d{2}-\d{2}$/
+const TASK_DAYS_KEY = /^(curva|campo):\d{4}-\d{2}$/
 const same = (a: unknown, b: unknown) => JSON.stringify(a) === JSON.stringify(b)
 
 /** Valida y limpia datos de afuera (archivo importado, request). null si no tienen la forma mínima. */
@@ -49,6 +51,12 @@ export function normalize(raw: unknown): AppData | null {
       tasks[id] = { kind: t.kind, date: t.date, personId: t.personId }
     }
   }
+  const taskDays: TaskDays = {}
+  for (const [key, v] of Object.entries(obj(raw.taskDays))) {
+    if (TASK_DAYS_KEY.test(key) && Array.isArray(v) && v.every((n) => Number.isInteger(n) && n >= 0 && n <= 6)) {
+      taskDays[key] = [...new Set<number>(v)].sort((a, b) => a - b)
+    }
+  }
   const s = obj(raw.settings)
   const settings: Settings = {
     quirofanoEnabled: typeof s.quirofanoEnabled === 'boolean' ? s.quirofanoEnabled : defaultSettings.quirofanoEnabled,
@@ -59,7 +67,7 @@ export function normalize(raw: unknown): AppData | null {
       .map((h) => ({ date: h.date, name: typeof h.name === 'string' ? h.name.slice(0, 80) : 'Feriado' })),
     countFrom: typeof s.countFrom === 'string' && DATE.test(s.countFrom) ? s.countFrom : null,
   }
-  return { people, shifts, quirofano, tasks, settings }
+  return { people, shifts, quirofano, tasks, taskDays, settings }
 }
 
 const sundayOf = (monday: string) => new Date(Date.parse(`${monday}T00:00:00Z`) + 6 * 86_400_000).toISOString().slice(0, 10)
@@ -81,6 +89,7 @@ export function removePersonFrom(d: AppData, id: string, today: string): AppData
     shifts,
     quirofano,
     tasks,
+    taskDays: d.taskDays,
     settings: { ...d.settings, quirofanoOrder: d.settings.quirofanoOrder.filter((x) => x !== id) },
   }
 }
@@ -93,6 +102,7 @@ function dropDangling(d: AppData): AppData {
     shifts: Object.fromEntries(Object.entries(d.shifts).map(([k, v]) => [k, v !== null && !ids.has(v) ? null : v])),
     quirofano: Object.fromEntries(Object.entries(d.quirofano).filter(([, v]) => ids.has(v))),
     tasks: Object.fromEntries(Object.entries(d.tasks).filter(([, t]) => ids.has(t.personId))),
+    taskDays: d.taskDays,
     settings: { ...d.settings, quirofanoOrder: d.settings.quirofanoOrder.filter((id) => ids.has(id)) },
   }
 }
@@ -114,7 +124,11 @@ export function applyPatch(doc: AppData, patch: Patch): AppData {
   for (const [id, t] of Object.entries(obj(patch.tasks?.set))) tasks[id] = t
   for (const id of arr(patch.tasks?.del)) delete tasks[id as string]
 
-  const merged = { people: [...people.values()], shifts, quirofano, tasks, settings: { ...doc.settings, ...obj(patch.settings) } }
+  const taskDays: TaskDays = { ...doc.taskDays }
+  for (const [k, v] of Object.entries(obj(patch.taskDays?.set))) taskDays[k] = v
+  for (const k of arr(patch.taskDays?.del)) delete taskDays[k as string]
+
+  const merged = { people: [...people.values()], shifts, quirofano, tasks, taskDays, settings: { ...doc.settings, ...obj(patch.settings) } }
   return dropDangling(normalize(merged) ?? doc)
 }
 
@@ -141,6 +155,8 @@ export function diff(base: AppData, cur: AppData): Patch | null {
   if (quirofano) patch.quirofano = quirofano
   const tasks = mapDiff(base.tasks, cur.tasks)
   if (tasks) patch.tasks = tasks
+  const taskDays = mapDiff(base.taskDays, cur.taskDays)
+  if (taskDays) patch.taskDays = taskDays
 
   const settings: Obj = {}
   for (const k of Object.keys(cur.settings) as (keyof Settings)[]) {

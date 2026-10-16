@@ -9,6 +9,7 @@ const base = (): AppData => ({
   shifts: { '2026-10-10': 'flor', '2026-10-16': 'flor', '2026-10-20': 'flor', '2026-10-21': 'ana', '2026-10-22': null },
   quirofano: { '2026-10-05': 'flor', '2026-10-12': 'flor', '2026-10-19': 'flor', '2026-10-26': 'ana' },
   tasks: {},
+  taskDays: {},
   settings: { ...defaultSettings, quirofanoOrder: ['flor', 'ana'] },
 })
 
@@ -106,5 +107,38 @@ describe('tareas (Curva y Campo)', () => {
     b.tasks.t1.personId = 'ana'
     delete b.tasks.t2
     expect(diff(a, b)).toEqual({ tasks: { set: { t1: b.tasks.t1 }, del: ['t2'] } })
+  })
+})
+
+describe('días fijos de Curva y Campo', () => {
+  it('normalize conserva los meses bien formados (días únicos y ordenados, vacío incluido) y descarta el resto', () => {
+    const raw = {
+      people: [],
+      shifts: {},
+      taskDays: {
+        'curva:2026-10': [4, 2, 2],
+        'campo:2026-11': [],
+        'otra:2026-10': [1],
+        'curva:2026-1': [1],
+        'campo:2026-10': [7],
+        'curva:2026-12': 'lunes',
+      },
+    }
+    expect(normalize(raw)!.taskDays).toEqual({ 'curva:2026-10': [2, 4], 'campo:2026-11': [] })
+    expect(normalize({ people: [], shifts: {} })!.taskDays).toEqual({})
+  })
+
+  it('un parche cambia solo los meses que trae y puede borrar uno (vuelve a heredar)', () => {
+    const doc: AppData = { ...emptyData(), taskDays: { 'curva:2026-10': [2], 'campo:2026-10': [3] } }
+    const out = applyPatch(doc, { taskDays: { set: { 'curva:2026-11': [4] }, del: ['campo:2026-10'] } })
+    expect(out.taskDays).toEqual({ 'curva:2026-10': [2], 'curva:2026-11': [4] })
+  })
+
+  it('diff manda un mes si cambió su lista de días, aunque el largo sea el mismo', () => {
+    const a: AppData = { ...emptyData(), taskDays: { 'curva:2026-10': [2], 'campo:2026-10': [3] } }
+    expect(diff(a, structuredClone(a))).toBeNull()
+    const b = structuredClone(a)
+    b.taskDays['curva:2026-10'] = [4]
+    expect(diff(a, b)).toEqual({ taskDays: { set: { 'curva:2026-10': [4] }, del: [] } })
   })
 })
