@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { curvaDefault, taskGaps, taskWeekdays } from './tasks'
+import { curvaDefault, suggestCampo, taskGaps, taskWeekdays } from './tasks'
 import type { TaskDays, Tasks } from './types'
 
 const t = (kind: 'curva' | 'campo', date: string, personId = 'ana') => ({ kind, date, personId })
@@ -98,8 +98,14 @@ describe('taskGaps con días fijos', () => {
 
   it('se cuenta por cantidad: dos anotaciones en la semana cubren dos días, sean cuales sean', () => {
     const days: TaskDays = { 'curva:2026-10': [2, 4] }
-    const tasks: Tasks = { a: t('curva', '2026-10-06'), b: t('curva', '2026-10-08'), c: t('curva', '2026-10-13'), d: t('curva', '2026-10-13', 'beto') }
+    const tasks: Tasks = { a: t('curva', '2026-10-06'), b: t('curva', '2026-10-08'), c: t('curva', '2026-10-12'), d: t('curva', '2026-10-14') }
     expect(gaps(tasks, days, 'curva', today).missing).toEqual([])
+  })
+
+  it('una misma fecha repetida cuenta una sola vez', () => {
+    const days: TaskDays = { 'curva:2026-10': [2, 4] }
+    const tasks: Tasks = { a: t('curva', '2026-10-06'), b: t('curva', '2026-10-08'), c: t('curva', '2026-10-13'), d: t('curva', '2026-10-13', 'beto') }
+    expect(gaps(tasks, days, 'curva', today).missing).toEqual(['2026-10-15'])
   })
 
   it('el día de hoy sin anotación todavía no falta: está pendiente', () => {
@@ -143,6 +149,64 @@ describe('taskGaps con días fijos', () => {
       missing: ['2026-10-08', '2026-10-15'],
       pending: ['2026-10-22', '2026-10-29'],
     })
+  })
+})
+
+describe('suggestCampo', () => {
+  // Hoy se anotó el Campo del jueves 1/10 con 'a'. Los jueves siguientes son el 8, 15, 22 y 29.
+  const order = ['a', 'b', 'c']
+  const done: Tasks = { x: t('campo', '2026-10-01', 'a') }
+
+  it('es la siguiente persona del orden después de quien hizo el último Campo', () => {
+    expect(suggestCampo(['2026-10-08'], done, order, {})).toEqual({ '2026-10-08': 'b' })
+  })
+
+  it('encadena las fechas pedidas, como si cada recomendación se hubiera anotado, y da la vuelta', () => {
+    expect(suggestCampo(['2026-10-08', '2026-10-15', '2026-10-22', '2026-10-29'], done, order, {})).toEqual({
+      '2026-10-08': 'b',
+      '2026-10-15': 'c',
+      '2026-10-22': 'a',
+      '2026-10-29': 'b',
+    })
+  })
+
+  it('no importa en qué orden vengan las fechas', () => {
+    expect(suggestCampo(['2026-10-22', '2026-10-08', '2026-10-15'], done, order, {})).toEqual({
+      '2026-10-08': 'b',
+      '2026-10-15': 'c',
+      '2026-10-22': 'a',
+    })
+  })
+
+  it('se saltea a quien tiene el quirófano esa semana, sea cual sea el día', () => {
+    const q = { '2026-10-05': 'b' }
+    expect(suggestCampo(['2026-10-08'], done, order, q)).toEqual({ '2026-10-08': 'c' })
+    expect(suggestCampo(['2026-10-11'], done, order, q)).toEqual({ '2026-10-11': 'c' })
+    // la semana siguiente no tiene a nadie: sigue el orden desde quien hizo el último
+    expect(suggestCampo(['2026-10-08', '2026-10-15'], done, order, q)).toEqual({ '2026-10-08': 'c', '2026-10-15': 'a' })
+  })
+
+  it('sin Campo anotado antes arranca por el primero del orden', () => {
+    expect(suggestCampo(['2026-10-08'], {}, order, {})).toEqual({ '2026-10-08': 'a' })
+    expect(suggestCampo(['2026-10-08'], {}, order, { '2026-10-05': 'a' })).toEqual({ '2026-10-08': 'b' })
+  })
+
+  it('la Curva no cuenta para el orden', () => {
+    expect(suggestCampo(['2026-10-08'], { x: t('curva', '2026-10-01', 'b') }, order, {})).toEqual({ '2026-10-08': 'a' })
+  })
+
+  it('lo anotado entre las fechas pedidas manda sobre lo recomendado', () => {
+    const tasks: Tasks = { x: t('campo', '2026-10-01', 'a'), y: t('campo', '2026-10-14', 'c') }
+    expect(suggestCampo(['2026-10-08', '2026-10-22'], tasks, order, {})).toEqual({ '2026-10-08': 'b', '2026-10-22': 'a' })
+  })
+
+  it('si quien hizo el último ya no está en el orden, arranca por el primero', () => {
+    expect(suggestCampo(['2026-10-08'], { x: t('campo', '2026-10-01', 'ex') }, order, {})).toEqual({ '2026-10-08': 'a' })
+  })
+
+  it('sin nadie que pueda hacerlo no recomienda', () => {
+    expect(suggestCampo(['2026-10-08'], {}, [], {})).toEqual({})
+    expect(suggestCampo(['2026-10-08'], {}, ['a'], { '2026-10-05': 'a' })).toEqual({})
   })
 })
 

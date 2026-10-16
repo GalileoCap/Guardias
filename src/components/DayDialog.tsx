@@ -2,10 +2,11 @@ import { format, parseISO } from 'date-fns'
 import { es } from 'date-fns/locale'
 import { useMemo, useState } from 'react'
 import { addDaysTo, isoOf, mondayOf } from '../dates'
-import { CATEGORIES, categoriesOf, hasIssue, rankCandidates } from '../fairness'
+import { taskKey } from '../data'
+import { CATEGORIES, categoriesOf, hasIssue, rankCandidates, rotationOrder } from '../fairness'
 import { useHolidayLookup, useIgnoreGhostClick, useProblems, useQuirofano } from '../hooks'
 import { useStore } from '../store'
-import { TASK_KINDS, curvaDefault, taskGaps } from '../tasks'
+import { TASK_KINDS, campoPlan, curvaDefault, taskGaps } from '../tasks'
 import type { TaskKind } from '../types'
 
 const days = (n: number) => (n === 1 ? '1 día' : `${n} días`)
@@ -15,60 +16,67 @@ function nearestLabel(before: number | null, after: number | null) {
   return Number.isFinite(nearest) ? ` · Más cercana: ${days(nearest)}` : ''
 }
 
-/** Anotaciones de una tarea (Curva o Campo) en el día: quién la hizo, y agregar o quitar. No cuentan en la justicia. */
+/**
+ * Quién hizo la tarea (Curva o Campo) en el día: una sola persona por tarea y día. Si todavía no hay nadie viene
+ * preseleccionada la Curva con quien tuvo quirófano la semana anterior, y el Campo con la persona que sigue en el orden
+ * del quirófano. No cuenta en la justicia.
+ */
 function TaskRow({ kind, label, date }: { kind: TaskKind; label: string; date: string }) {
-  const { people, tasks, taskDays, addTask, removeTask } = useStore()
-  const quirofano = useQuirofano()
+  const { people, tasks, taskDays, settings, setTask, removeTask } = useStore()
+  const monday = mondayOf(date)
+  const weeks = useMemo(() => [addDaysTo(monday, -7), monday], [monday])
+  const quirofano = useQuirofano(weeks)
   const peopleById = useMemo(() => new Map(people.map((p) => [p.id, p])), [people])
-  const active = people.filter((p) => p.active)
-  // La Curva viene con quien tuvo quirófano la semana anterior
-  const suggested = kind === 'curva' ? curvaDefault(quirofano, date) : null
-  const [picked, setPicked] = useState(active.some((p) => p.id === suggested) ? suggested! : '')
-  const entries = Object.entries(tasks).filter(([, t]) => t.kind === kind && t.date === date)
-  // Lo que falta en la semana de este día y si hoy toca
-  const gaps = useMemo(() => {
-    const monday = mondayOf(date)
-    return taskGaps(tasks, taskDays, kind, isoOf(new Date()), monday, addDaysTo(monday, 7))
-  }, [tasks, taskDays, kind, date])
+  const entry = tasks[taskKey(kind, date)]
+  // Lo que falta en la semana de este día, y a quién recomendar para el Campo
+  const plan = useMemo(() => {
+    const today = isoOf(new Date())
+    if (kind === 'campo') {
+      return campoPlan(tasks, taskDays, today, monday, addDaysTo(monday, 7), rotationOrder(people, settings), quirofano, [date])
+    }
+    return { ...taskGaps(tasks, taskDays, kind, today, monday, addDaysTo(monday, 7)), suggestions: {} as Record<string, string> }
+  }, [tasks, taskDays, kind, date, monday, people, settings, quirofano])
+  const suggested = kind === 'curva' ? curvaDefault(quirofano, date) : (plan.suggestions[date] ?? null)
+  const suggestedNote = kind === 'curva' ? ' (quirófano la semana anterior)' : ' (recomendada)'
+  const options = people.filter((p) => p.active || p.id === entry?.personId)
+  const [picked, setPicked] = useState(entry?.personId ?? (options.some((p) => p.id === suggested) ? suggested! : ''))
+  const entryPerson = entry && peopleById.get(entry.personId)
 
   return (
     <div className="mt-2">
       <div className="flex flex-wrap items-center gap-2">
         <span className="text-sm font-semibold">{label}</span>
-        {gaps.missing.length > 0 && <span className="badge badge-error badge-soft badge-sm">falta esta semana</span>}
-        {gaps.pending.includes(date) && <span className="badge badge-ghost badge-sm">toca este día</span>}
-        {entries.map(([id, t]) => {
-          const person = peopleById.get(t.personId)
-          return (
-            <span key={id} className="badge badge-ghost gap-1.5 pr-1">
-              <span className="inline-block size-2 rounded-full" style={{ background: person?.color }} />
-              {person?.name ?? 'Alguien'}
-              <button className="btn btn-ghost btn-xs btn-circle size-5 min-h-0" aria-label={`Quitar ${label} de ${person?.name ?? 'alguien'}`} onClick={() => removeTask(id)}>
-                ×
-              </button>
-            </span>
-          )
-        })}
+        {plan.missing.length > 0 && <span className="badge badge-error badge-soft badge-sm">falta esta semana</span>}
+        {plan.pending.includes(date) && <span className="badge badge-ghost badge-sm">toca este día</span>}
+        {entry && (
+          <span className="badge badge-ghost gap-1.5 pr-1">
+            <span className="inline-block size-2 rounded-full" style={{ background: entryPerson?.color }} />
+            {entryPerson?.name ?? 'Alguien'}
+            <button
+              className="btn btn-ghost btn-xs btn-circle size-5 min-h-0"
+              aria-label={`Quitar ${label} de ${entryPerson?.name ?? 'alguien'}`}
+              onClick={() => {
+                removeTask(kind, date)
+                setPicked(suggested ?? '')
+              }}
+            >
+              ×
+            </button>
+          </span>
+        )}
       </div>
       <div className="mt-1 flex gap-2">
         <select className="select select-sm min-w-0 flex-1" value={picked} aria-label={`Quién hizo ${label}`} onChange={(e) => setPicked(e.target.value)}>
           <option value="">Elegir persona…</option>
-          {active.map((p) => (
+          {options.map((p) => (
             <option key={p.id} value={p.id}>
               {p.name}
-              {p.id === suggested ? ' (quirófano la semana anterior)' : ''}
+              {p.id === suggested ? suggestedNote : ''}
             </option>
           ))}
         </select>
-        <button
-          className="btn btn-sm btn-primary"
-          disabled={!picked}
-          onClick={() => {
-            addTask(kind, date, picked)
-            setPicked('')
-          }}
-        >
-          Agregar
+        <button className="btn btn-sm btn-primary" disabled={!picked || picked === entry?.personId} onClick={() => setTask(kind, date, picked)}>
+          {entry ? 'Cambiar' : 'Agregar'}
         </button>
       </div>
     </div>
@@ -175,7 +183,7 @@ export default function DayDialog({ date, onClose }: { date: string; onClose: ()
 
         <div className="mt-4 border-t border-base-300 pt-3">
           <h4 className="text-sm font-bold">Curva y Campo</h4>
-          <p className="text-xs text-base-content/50">Se anotan por día, pueden ser varias por semana y no cuentan en la justicia.</p>
+          <p className="text-xs text-base-content/50">Una Curva y un Campo por día como máximo. No cuentan en la justicia.</p>
           {TASK_KINDS.map((k) => (
             <TaskRow key={k.key} kind={k.key} label={k.label} date={date} />
           ))}

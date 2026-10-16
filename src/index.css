@@ -124,6 +124,9 @@ body::before {
 
 /* Curva y Campo: más chicos y de fondo suave, para que la guardia mande en la celda */
 .fc .fc-event.task { font-size: 0.7rem; padding: 0 8px; font-weight: 500; border-width: 1px; }
+/* Campo recomendado para un día en que toca y no está anotado; con el aviso rojo si el día ya pasó */
+.fc .fc-event.task-suggested { border-style: dashed; opacity: 0.85; }
+.fc .fc-event.task-late { outline: 1px dashed var(--color-error); outline-offset: 1px; }
 .fc .fc-event.task-missing {
   font-size: 0.7rem;
   padding: 0 8px;

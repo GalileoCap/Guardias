@@ -6,8 +6,8 @@ import interactionPlugin from '@fullcalendar/interaction'
 import FullCalendar from '@fullcalendar/react'
 import { useCallback, useMemo, useRef, useState } from 'react'
 import { addDaysTo, isoOf, mondayOf } from '../dates'
-import { hasIssue, rankCandidates, scoreShifts } from '../fairness'
-import { TASK_KINDS, taskGaps } from '../tasks'
+import { hasIssue, rankCandidates, rotationOrder, scoreShifts } from '../fairness'
+import { TASK_KINDS, campoPlan, taskGaps } from '../tasks'
 import { suggestAssignments } from '../search'
 import { contrastText, useHolidayLookup, useProblems, useQuirofano } from '../hooks'
 import { useStore } from '../store'
@@ -144,14 +144,21 @@ export default function CalendarView({
     })
   }
 
-  // Lo que falta anotar de Curva y de Campo en lo que se ve del calendario, y lo que viene
+  // Lo que falta anotar de Curva y de Campo en lo que se ve del calendario, y lo que viene; para el Campo, también a quién
+  // recomendar en cada fecha
   const taskGapsByKind = useMemo(() => {
     if (!range) return []
     const today = iso(new Date())
     const from = range.weeks[0]
     const to = addDaysTo(range.weeks[range.weeks.length - 1], 7)
-    return TASK_KINDS.map((kind) => ({ kind, ...taskGaps(tasks, taskDays, kind.key, today, from, to) }))
-  }, [tasks, taskDays, range])
+    const order = rotationOrder(people, settings)
+    return TASK_KINDS.map((kind) => ({
+      kind,
+      ...(kind.key === 'campo'
+        ? campoPlan(tasks, taskDays, today, from, to, order, quirofano)
+        : { ...taskGaps(tasks, taskDays, kind.key, today, from, to), suggestions: {} as Record<string, string> }),
+    }))
+  }, [tasks, taskDays, range, people, settings, quirofano])
 
   const events = useMemo<EventInput[]>(() => {
     const emphasis = (personId: string | null | undefined) =>
@@ -209,37 +216,46 @@ export default function CalendarView({
         },
       ]
     })
-    const gaps = taskGapsByKind.flatMap(({ kind, missing, pending }, index) => [
-      ...missing.map(
-        (date): EventInput => ({
+    // Un día en que toca la tarea y no está anotada: con persona recomendada si la hay, y si no un aviso o un lugar marcado
+    const gapEvent = (kind: (typeof TASK_KINDS)[number], index: number, date: string, late: boolean, suggestedId?: string): EventInput => {
+      const person = suggestedId ? peopleById.get(suggestedId) : undefined
+      const order = 2 + index * 2
+      const lateNote = late ? 'Falta anotarla. ' : ''
+      if (person) {
+        return {
           start: date,
           allDay: true,
-          title: `Falta ${kind.label}`,
-          classNames: ['task-missing'],
+          title: `${kind.label} · ${person.name}?`,
+          classNames: ['task', 'task-suggested', ...(late ? ['task-late'] : []), ...emphasis(person.id)],
+          backgroundColor: `color-mix(in oklab, ${person.color} 22%, white)`,
+          borderColor: person.color,
+          textColor: 'var(--color-base-content)',
           extendedProps: {
             date,
             isTask: true,
-            order: 2 + index * 2,
-            task: { label: `Falta ${kind.label}`, short: `Falta ${kind.short}` },
-            tip: `Falta anotar la ${kind.label}. Tocá el día para anotarla.`,
+            order,
+            task: { label: kind.label, short: kind.short, name: `${person.name}?` },
+            tip: `${lateNote}Recomendada para ${kind.label}: ${person.name}, la siguiente en el orden del quirófano. Tocá el día para anotarla.`,
           },
-        }),
-      ),
-      ...pending.map(
-        (date): EventInput => ({
-          start: date,
-          allDay: true,
-          title: kind.label,
-          classNames: ['task-pending'],
-          extendedProps: {
-            date,
-            isTask: true,
-            order: 2 + index * 2,
-            task: { label: kind.label, short: kind.short },
-            tip: `Toca ${kind.label} este día. Tocá el día para anotarla.`,
-          },
-        }),
-      ),
+        }
+      }
+      return {
+        start: date,
+        allDay: true,
+        title: late ? `Falta ${kind.label}` : kind.label,
+        classNames: [late ? 'task-missing' : 'task-pending'],
+        extendedProps: {
+          date,
+          isTask: true,
+          order,
+          task: late ? { label: `Falta ${kind.label}`, short: `Falta ${kind.short}` } : { label: kind.label, short: kind.short },
+          tip: `${late ? `Falta anotar la ${kind.label}.` : `Toca ${kind.label} este día.`} Tocá el día para anotarla.`,
+        },
+      }
+    }
+    const gaps = taskGapsByKind.flatMap(({ kind, missing, pending, suggestions }, index) => [
+      ...missing.map((date) => gapEvent(kind, index, date, true, suggestions[date])),
+      ...pending.map((date) => gapEvent(kind, index, date, false, suggestions[date])),
     ])
     return [...real, ...ghosts, ...done, ...gaps]
   }, [shifts, suggestions, tasks, taskGapsByKind, peopleById, highlightId, problems, showProblems, unavoidable])

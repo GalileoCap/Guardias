@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { applyPatch, defaultSettings, diff, emptyData, normalize, removePersonFrom } from './data'
+import { applyPatch, defaultSettings, diff, emptyData, normalize, removePersonFrom, taskKey } from './data'
 import type { AppData } from './types'
 
 const person = (id: string) => ({ id, name: id, color: '#fff', active: true })
@@ -59,7 +59,7 @@ describe('tareas (Curva y Campo)', () => {
       t1: { kind: 'curva', date: '2026-10-07', personId: 'flor' },
       t2: { kind: 'curva', date: '2026-10-14', personId: 'flor' },
       t3: { kind: 'campo', date: '2026-10-21', personId: 'flor' },
-      t4: { kind: 'campo', date: '2026-10-21', personId: 'ana' },
+      t4: { kind: 'campo', date: '2026-10-22', personId: 'ana' },
     },
   })
 
@@ -88,16 +88,46 @@ describe('tareas (Curva y Campo)', () => {
         p: { kind: 'campo', date: '2026-10-12' },
       },
     }
-    expect(normalize(raw)!.tasks).toEqual({ ok })
+    expect(normalize(raw)!.tasks).toEqual({ [taskKey('curva', '2026-10-12')]: ok })
     expect(normalize({ people: [], shifts: {} })!.tasks).toEqual({})
   })
 
   it('un parche agrega y borra anotaciones por clave, y descarta las de personas que ya no existen', () => {
     const doc: AppData = { ...emptyData(), people: [person('ana')], tasks: { gone: { kind: 'curva', date: '2026-10-07', personId: 'ana' } } }
     const out = applyPatch(doc, {
-      tasks: { set: { n: { kind: 'campo', date: '2026-10-14', personId: 'ana' }, x: { kind: 'campo', date: '2026-10-14', personId: 'nadie' } }, del: ['gone'] },
+      tasks: { set: { n: { kind: 'campo', date: '2026-10-14', personId: 'ana' }, x: { kind: 'campo', date: '2026-10-15', personId: 'nadie' } }, del: ['gone'] },
     })
-    expect(Object.keys(out.tasks)).toEqual(['n'])
+    expect(Object.keys(out.tasks)).toEqual(['campo:2026-10-14'])
+  })
+
+  it('taskKey es una clave por tarea y día', () => {
+    expect(taskKey('campo', '2026-10-08')).toBe('campo:2026-10-08')
+    expect(taskKey('curva', '2026-10-08')).not.toBe(taskKey('campo', '2026-10-08'))
+  })
+
+  it('hay una sola Curva y un solo Campo por día: normalize junta los repetidos y se queda con el último', () => {
+    const raw = {
+      people: [person('ana'), person('flor')],
+      shifts: {},
+      tasks: {
+        u1: { kind: 'campo', date: '2026-10-08', personId: 'ana' },
+        u2: { kind: 'campo', date: '2026-10-08', personId: 'flor' },
+        u3: { kind: 'curva', date: '2026-10-08', personId: 'ana' },
+        u4: { kind: 'campo', date: '2026-10-15', personId: 'ana' },
+      },
+    }
+    expect(normalize(raw)!.tasks).toEqual({
+      'campo:2026-10-08': { kind: 'campo', date: '2026-10-08', personId: 'flor' },
+      'curva:2026-10-08': { kind: 'curva', date: '2026-10-08', personId: 'ana' },
+      'campo:2026-10-15': { kind: 'campo', date: '2026-10-15', personId: 'ana' },
+    })
+  })
+
+  it('dos parches sobre la misma tarea y día se reemplazan, no se suman', () => {
+    const key = taskKey('curva', '2026-10-08')
+    const doc: AppData = { ...emptyData(), people: [person('ana'), person('flor')], tasks: { [key]: { kind: 'curva', date: '2026-10-08', personId: 'ana' } } }
+    const out = applyPatch(doc, { tasks: { set: { [key]: { kind: 'curva', date: '2026-10-08', personId: 'flor' } }, del: [] } })
+    expect(Object.values(out.tasks)).toEqual([{ kind: 'curva', date: '2026-10-08', personId: 'flor' }])
   })
 
   it('diff solo manda las anotaciones que cambiaron', () => {

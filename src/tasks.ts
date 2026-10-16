@@ -35,14 +35,11 @@ export function taskGaps(
   from: string,
   to: string,
 ): { missing: string[]; pending: string[] } {
-  const weeks = new Map<string, { count: number; dates: Set<string> }>()
+  const weeks = new Map<string, Set<string>>()
   for (const t of Object.values(tasks)) {
     if (t.kind !== kind) continue
     const monday = mondayOf(t.date)
-    const week = weeks.get(monday) ?? { count: 0, dates: new Set<string>() }
-    week.count++
-    week.dates.add(t.date)
-    weeks.set(monday, week)
+    weeks.set(monday, (weeks.get(monday) ?? new Set<string>()).add(t.date))
   }
   const firstWeek = [...weeks.keys()].sort()[0] ?? null
 
@@ -64,14 +61,62 @@ export function taskGaps(
       if (counted && !mine && addDaysTo(w, 6) < today) missing.push(w)
       continue
     }
-    const shortfall = expected.length - (mine?.count ?? 0)
-    for (const date of expected.filter((d) => !mine?.dates.has(d)).slice(0, Math.max(shortfall, 0))) {
+    const shortfall = expected.length - (mine?.size ?? 0)
+    for (const date of expected.filter((d) => !mine?.has(d)).slice(0, Math.max(shortfall, 0))) {
       if (date >= today) pending.push(date)
       else if (counted) missing.push(date)
     }
   }
   const inRange = (d: string) => d >= from && d < to
   return { missing: missing.filter(inRange), pending: pending.filter(inRange) }
+}
+
+/**
+ * A quién recomendar para el Campo de cada fecha de `dates`: la siguiente persona del orden de `order` (el de la
+ * rotación del quirófano) después de quien hizo el Campo anterior, anotado o ya recomendado para una fecha previa, sin
+ * contar a quien tiene el quirófano esa semana. Sin ningún Campo antes (o si quien lo hizo ya no está en el orden)
+ * arranca por el primero. Una fecha sin nadie que pueda hacerlo queda sin recomendación.
+ */
+export function suggestCampo(dates: string[], tasks: Tasks, order: string[], quirofano: Quirofano): Record<string, string> {
+  const events = Object.values(tasks)
+    .filter((t) => t.kind === 'campo')
+    .map((t) => ({ date: t.date, personId: t.personId }))
+  const out: Record<string, string> = {}
+  for (const date of [...new Set(dates)].sort()) {
+    // Lo último que pasó antes de esta fecha; con la misma fecha manda lo anotado (viene primero en `events`)
+    let prev: string | null = null
+    let prevDate = ''
+    for (const e of events) if (e.date < date && e.date > prevDate) [prev, prevDate] = [e.personId, e.date]
+    const busy = quirofano[mondayOf(date)]
+    const from = prev === null ? 0 : order.indexOf(prev) + 1
+    const pick = Array.from({ length: order.length }, (_, i) => order[(from + i) % order.length]).find((id) => id !== busy)
+    if (pick === undefined) continue
+    out[date] = pick
+    events.push({ date, personId: pick })
+  }
+  return out
+}
+
+/**
+ * Lo que falta anotar del Campo entre `from` y `to` (como `taskGaps`) y a quién recomendar en cada fecha de eso y de
+ * `extra`. La recomendación encadena desde el primer Campo anotado, no solo desde `from`: así el calendario y el
+ * diálogo de un día dan lo mismo sin importar qué mes se esté viendo.
+ */
+export function campoPlan(
+  tasks: Tasks,
+  taskDays: TaskDays,
+  today: string,
+  from: string,
+  to: string,
+  order: string[],
+  quirofano: Quirofano,
+  extra: string[] = [],
+): { missing: string[]; pending: string[]; suggestions: Record<string, string> } {
+  const first = Object.values(tasks).filter((t) => t.kind === 'campo').map((t) => t.date).sort()[0]
+  const all = taskGaps(tasks, taskDays, 'campo', today, first !== undefined && first < from ? first : from, to)
+  const suggestions = suggestCampo([...all.missing, ...all.pending, ...extra], tasks, order, quirofano)
+  const inRange = (d: string) => d >= from && d < to
+  return { missing: all.missing.filter(inRange), pending: all.pending.filter(inRange), suggestions }
 }
 
 /** Quién viene preseleccionado para la Curva de `date`: quien tuvo quirófano la semana anterior a la de esa fecha. */

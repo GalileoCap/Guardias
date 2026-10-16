@@ -1,6 +1,6 @@
 // Lógica de datos compartida entre el cliente y el servidor (server/index.mjs la importa tal cual,
 // Node ≥ 22.18 ejecuta TypeScript borrando los tipos). Solo sintaxis "borrable": nada de enums ni imports de paquetes.
-import type { AppData, Person, Quirofano, Settings, Shifts, TaskDays, Tasks } from './types'
+import type { AppData, Person, Quirofano, Settings, Shifts, TaskDays, TaskKind, Tasks } from './types'
 
 export const defaultSettings: Settings = {
   quirofanoEnabled: true,
@@ -11,6 +11,9 @@ export const defaultSettings: Settings = {
 }
 
 export const emptyData = (): AppData => ({ people: [], shifts: {}, quirofano: {}, tasks: {}, taskDays: {}, settings: { ...defaultSettings } })
+
+/** Clave de la anotación de una tarea en un día: hay una sola por tarea y día. */
+export const taskKey = (kind: TaskKind, date: string) => `${kind}:${date}`
 
 /** Cambios entre dos versiones. Se aplican por clave (no pisan lo que otra persona cambió en otro día/persona). */
 export type Patch = {
@@ -46,9 +49,11 @@ export function normalize(raw: unknown): AppData | null {
   const quirofano: Quirofano = {}
   for (const [d, v] of Object.entries(obj(raw.quirofano))) if (DATE.test(d) && typeof v === 'string') quirofano[d] = v
   const tasks: Tasks = {}
-  for (const [id, t] of Object.entries(obj(raw.tasks))) {
+  // la clave se vuelve a armar a partir de la tarea y el día: si vienen repetidas (datos de antes de que fuera una por
+  // día, o dos parches sobre lo mismo) queda la última
+  for (const t of Object.values(obj(raw.tasks))) {
     if (isObj(t) && (t.kind === 'curva' || t.kind === 'campo') && typeof t.date === 'string' && DATE.test(t.date) && typeof t.personId === 'string') {
-      tasks[id] = { kind: t.kind, date: t.date, personId: t.personId }
+      tasks[taskKey(t.kind, t.date)] = { kind: t.kind, date: t.date, personId: t.personId }
     }
   }
   const taskDays: TaskDays = {}

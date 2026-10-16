@@ -13,10 +13,10 @@ export type Quirofano = Record<string, string>
 
 export type TaskKind = 'curva' | 'campo'
 
-/** Una vez que alguien hizo la tarea el día `date`. Puede haber varias por semana y no cuentan en la justicia. */
+/** Quién hizo la tarea el día `date`. No cuenta en la justicia. */
 export type Task = { kind: TaskKind; date: string; personId: string }
 
-/** id de la anotación -> anotación */
+/** Una Curva y un Campo por día como máximo: la clave es `taskKey(kind, date)` (ver data.ts) */
 export type Tasks = Record<string, Task>
 
 /**

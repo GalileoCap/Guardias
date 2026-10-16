@@ -1,6 +1,6 @@
 import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
-import { defaultSettings, removePersonFrom } from './data'
+import { defaultSettings, normalize, removePersonFrom, taskKey } from './data'
 import { isoOf } from './dates'
 import { GROUP } from './group'
 import type { AppData, Person, Settings, TaskKind } from './types'
@@ -22,9 +22,9 @@ type Actions = {
   removeShift: (date: string) => void
   /** week = lunes de la semana. personId null = sin asignar */
   setQuirofano: (week: string, personId: string | null) => void
-  /** Anota que `personId` hizo la tarea el día `date`. Puede haber varias el mismo día. */
-  addTask: (kind: TaskKind, date: string, personId: string) => void
-  removeTask: (id: string) => void
+  /** Anota que `personId` hizo la tarea el día `date`; reemplaza a quien estuviera anotado: hay una por tarea y día. */
+  setTask: (kind: TaskKind, date: string, personId: string) => void
+  removeTask: (kind: TaskKind, date: string) => void
   /** Días de la semana en que toca la tarea en `month` ('YYYY-MM'). null = sin configuración propia: hereda del mes anterior */
   setTaskDays: (kind: TaskKind, month: string, days: number[] | null) => void
   updateSettings: (patch: Partial<Settings>) => void
@@ -68,10 +68,10 @@ export const useStore = create<AppData & Actions>()(
           const { [week]: _, ...rest } = s.quirofano
           return { quirofano: personId ? { ...rest, [week]: personId } : rest }
         }),
-      addTask: (kind, date, personId) => set((s) => ({ tasks: { ...s.tasks, [crypto.randomUUID()]: { kind, date, personId } } })),
-      removeTask: (id) =>
+      setTask: (kind, date, personId) => set((s) => ({ tasks: { ...s.tasks, [taskKey(kind, date)]: { kind, date, personId } } })),
+      removeTask: (kind, date) =>
         set((s) => {
-          const { [id]: _, ...rest } = s.tasks
+          const { [taskKey(kind, date)]: _, ...rest } = s.tasks
           return { tasks: rest }
         }),
       setTaskDays: (kind, month, days) =>
@@ -90,7 +90,9 @@ export const useStore = create<AppData & Actions>()(
       // merge profundo de settings: así los ajustes nuevos toman su valor por defecto con datos viejos
       merge: (persisted, current) => {
         const p = (persisted ?? {}) as Partial<AppData>
-        return { ...current, ...p, settings: { ...current.settings, ...p.settings } }
+        // lo guardado antes de que las tareas fueran una por día tiene otras claves: se vuelven a armar
+        const tasks = normalize({ people: [], shifts: {}, tasks: p.tasks })?.tasks ?? {}
+        return { ...current, ...p, tasks, settings: { ...current.settings, ...p.settings } }
       },
       partialize: ({ people, shifts, quirofano, tasks, taskDays, settings }) => ({ people, shifts, quirofano, tasks, taskDays, settings }),
     },
