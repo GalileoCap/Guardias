@@ -122,30 +122,37 @@ body::before {
   opacity: 0.75;
 }
 
-/* Curva y Campo: más chicos y de fondo suave, para que la guardia mande en la celda */
+/* Quién sigue de guardia la mañana siguiente a una extensión: chico y de fondo suave */
 .fc .fc-event.task { font-size: 0.7rem; padding: 0 8px; font-weight: 500; border-width: 1px; }
-/* Campo recomendado para un día en que toca y no está anotado; con el aviso rojo si el día ya pasó */
-.fc .fc-event.task-suggested { border-style: dashed; opacity: 0.85; }
-.fc .fc-event.task-late { outline: 1px dashed var(--color-error); outline-offset: 1px; }
-.fc .fc-event.task-missing {
+/* Curva y Campo de un día: una fila de etiquetas chicas de fondo suave, para que la guardia mande en la celda */
+.fc .fc-event.task-row { padding: 0; border: 0; background: transparent; }
+.task-seg {
+  display: inline-flex;
+  min-width: 0;
+  align-items: center;
+  gap: 0.25rem;
+  padding: 0 6px;
+  border: 1px solid transparent;
+  border-radius: 9999px;
   font-size: 0.7rem;
-  padding: 0 8px;
+  font-weight: 500;
+  color: var(--color-base-content);
+}
+/* Recomendada para un día en que toca y no está anotada; con el aviso rojo si el día ya pasó */
+.task-seg-suggested { border-style: dashed; opacity: 0.85; }
+.task-seg-late { outline: 1px dashed var(--color-error); outline-offset: 1px; }
+.task-seg-missing {
   background: color-mix(in oklab, var(--color-error) 8%, transparent);
   border: 1px dashed var(--color-error);
+  color: var(--color-error);
 }
-.fc .fc-event.task-missing,
-.fc .fc-event.task-missing .fc-event-main,
-.fc .fc-event.task-missing .fc-event-title { color: var(--color-error); }
 /* Día en que toca y todavía no llegó: solo marca el lugar */
-.fc .fc-event.task-pending {
-  font-size: 0.7rem;
-  padding: 0 8px;
-  background: transparent;
+.task-seg-pending {
   border: 1px dashed color-mix(in oklab, var(--color-base-content) 35%, transparent);
+  color: color-mix(in oklab, var(--color-base-content) 60%, transparent);
 }
-.fc .fc-event.task-pending,
-.fc .fc-event.task-pending .fc-event-main,
-.fc .fc-event.task-pending .fc-event-title { color: color-mix(in oklab, var(--color-base-content) 60%, transparent); }
+.task-seg.dimmed { opacity: 0.18; }
+.task-seg.highlighted { box-shadow: 0 0 0 2px var(--color-base-content); }
 
 .fc .fc-event.dimmed { opacity: 0.18; }
 .fc .fc-event.highlighted {
@@ -176,7 +183,9 @@ body::before {
   .fc .fc-daygrid-day-number { font-size: 0.78rem; padding: 2px 4px; }
   .fc .fc-day-today .fc-daygrid-day-number { margin: 2px; padding: 0 5px; }
   .fc .fc-event { font-size: 0.66rem; padding: 1px 2px; text-align: center; }
-  .fc .fc-event.task, .fc .fc-event.task-missing, .fc .fc-event.task-pending { font-size: 0.58rem; padding: 0 2px; }
+  .fc .fc-event.task { font-size: 0.58rem; padding: 0 2px; }
+  .fc .fc-event.task-row { padding: 0; }
+  .task-seg { padding: 0 3px; }
   .fc .fc-daygrid-event { margin-inline: 2px; }
 }
 
@@ -195,12 +204,6 @@ body::before {
 .fc .fc-event.problem {
   outline: 2px solid var(--color-error);
   outline-offset: 0; /* el borde sobresale 2px: no puede pasar del margen de la píldora o la celda lo recorta */
-}
-
-/* Aviso discreto: hay problema, pero no existe una opción mejor */
-.fc .fc-event.problem-soft {
-  outline: 1px dashed color-mix(in oklab, var(--color-error) 55%, transparent);
-  outline-offset: 1px;
 }
 
 /* Hoja inferior de los diálogos (teléfono): que no quede bajo la barra de gestos */

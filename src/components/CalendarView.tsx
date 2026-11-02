@@ -34,13 +34,56 @@ const BUTTON_TEXT = { today: 'Hoy' }
 // Las guardias (`order` 0) van arriba en cada celda; Curva y Campo, y los avisos de que faltan, debajo
 const EVENT_ORDER = 'order,title'
 
+// Una tarea de un día dentro de la fila de Curva y Campo. `person` es la anotada o la recomendada (`suggested`); sin
+// persona, `late` es que el día pasó y falta anotarla, y si no solo marca el lugar.
+type TaskSegment = {
+  kind: TaskKind
+  person?: { id: string; name: string; color: string }
+  suggested?: boolean
+  late?: boolean
+  emphasis: string[]
+  tip: string
+}
+
+const segmentClass = ({ person, suggested, late, emphasis }: TaskSegment) =>
+  ['task-seg', ...(person ? (suggested ? ['task-seg-suggested'] : []) : [late ? 'task-seg-missing' : 'task-seg-pending']), ...(person && late ? ['task-seg-late'] : []), ...emphasis].join(' ')
+
+// Curva y Campo de un día en una sola fila: el ícono dice la tarea y el color la persona, así que el nombre de la tarea
+// no se escribe. En el teléfono queda solo el ícono.
+const renderTasks = (segments: TaskSegment[]) => (
+  <span className="flex min-w-0 gap-1">
+    {segments.map((seg) => (
+      <span
+        key={seg.kind}
+        title={seg.tip}
+        className={segmentClass(seg)}
+        style={seg.person && { background: `color-mix(in oklab, ${seg.person.color} 22%, white)`, borderColor: seg.person.color }}
+      >
+        <Icon name={seg.kind} className="size-2.5 shrink-0 sm:size-3" />
+        {seg.person ? (
+          <span className="hidden truncate sm:inline">
+            {seg.person.name}
+            {seg.suggested && '?'}
+          </span>
+        ) : (
+          seg.late && (
+            <>
+              <span className="sm:hidden">!</span>
+              <span className="hidden sm:inline">Falta</span>
+            </>
+          )
+        )}
+      </span>
+    ))}
+  </span>
+)
+
 // El motivo de cada guardia que perjudica va como tooltip del evento
 const renderEvent = (arg: EventContentArg) => {
-  const { problems, soft, tip, task, extension, carry } = arg.event.extendedProps as {
+  const { problems, tip, segments, extension, carry } = arg.event.extendedProps as {
     problems?: string[]
-    soft?: boolean
     tip?: string
-    task?: { kind: TaskKind; missing?: boolean; name?: string }
+    segments?: TaskSegment[]
     extension?: { end: string; hours: number }
     carry?: { end: string; name: string }
   }
@@ -54,35 +97,17 @@ const renderEvent = (arg: EventContentArg) => {
       </span>
     )
   }
-  if (task) {
-    // En el teléfono las celdas son angostas: la palabra "Curva" o "Campo" se esconde y queda el ícono
-    return (
-      <span title={tip} className="block truncate">
-        <Icon name={task.kind} className="mr-0.5 size-2.5 -translate-y-px sm:mr-1 sm:size-3" />
-        {task.missing && <span className="sm:hidden">!</span>}
-        <span className="hidden sm:inline">
-          {task.missing && 'Falta '}
-          {TASK_KINDS.find((k) => k.key === task.kind)!.label}
-        </span>
-        {task.name && (
-          <>
-            <span className="hidden sm:inline"> ·</span> {task.name}
-          </>
-        )}
-      </span>
-    )
-  }
+  if (segments) return renderTasks(segments)
   const tooltip = [
-    tip ?? (problems && [...problems, ...(soft ? ['(Ninguna otra persona lo haría mejor)'] : [])].join('\n')),
+    tip ?? problems?.join('\n'),
     extension && `Extendida hasta las ${extension.end} del día siguiente (+${formatHours(extension.hours)})`,
   ]
     .filter(Boolean)
     .join('\n')
-  // Aviso fuerte: ícono de advertencia pleno. Si no había mejor opción: el mismo ícono pero tenue, además del borde punteado
   return (
     <span title={tooltip || undefined} className="block truncate">
       {problems?.length ? (
-        <span className={`hidden sm:inline ${soft ? 'opacity-50' : ''}`}>
+        <span className="hidden sm:inline">
           <Icon name="warning" className="mr-1 size-3 -translate-y-px" />
         </span>
       ) : (
@@ -217,15 +242,15 @@ export default function CalendarView({
       .filter(([date]) => !(date in suggestions))
       .map(([date, personId]): EventInput => {
         const person = personId ? peopleById.get(personId) : undefined
-        const flagged = showProblems ? problems[date] : undefined
-        const soft = unavoidable.has(date)
+        // Sin aviso si nadie lo haría mejor: no hay nada que cambiar
+        const flagged = showProblems && !unavoidable.has(date) ? problems[date] : undefined
         return {
           id: date,
           start: date,
           allDay: true,
           title: person ? person.name : 'Sin asignar',
-          classNames: [...(person ? [] : ['unassigned']), ...emphasis(personId), ...(flagged ? [soft ? 'problem-soft' : 'problem'] : [])],
-          extendedProps: { problems: flagged, soft, order: 0, extension: extensionOf(date) },
+          classNames: [...(person ? [] : ['unassigned']), ...emphasis(personId), ...(flagged ? ['problem'] : [])],
+          extendedProps: { problems: flagged, order: 0, extension: extensionOf(date) },
           ...(person && {
             backgroundColor: person.color,
             borderColor: person.color,
@@ -247,65 +272,48 @@ export default function CalendarView({
         extendedProps: { date, order: 0, extension: extensionOf(date), tip: `Recomendada: ${person.name}. Tocá el día para elegir a otra persona.` },
       }
     })
-    const done = (r1 ? Object.values(tasks) : []).flatMap((t): EventInput[] => {
+    // Curva y Campo de cada día, en el orden de TASK_KINDS
+    const segmentsByDate = new Map<string, TaskSegment[]>()
+    const addSegment = (date: string, seg: TaskSegment) => segmentsByDate.set(date, [...(segmentsByDate.get(date) ?? []), seg])
+    for (const t of r1 ? Object.values(tasks) : []) {
       const person = peopleById.get(t.personId)
-      const index = TASK_KINDS.findIndex((k) => k.key === t.kind)
-      if (!person || index < 0) return []
-      const { label } = TASK_KINDS[index]
-      return [
-        {
-          start: t.date,
-          allDay: true,
-          title: `${label} · ${person.name}`,
-          classNames: ['task', ...emphasis(t.personId)],
-          backgroundColor: `color-mix(in oklab, ${person.color} 22%, white)`,
-          borderColor: person.color,
-          textColor: 'var(--color-base-content)',
-          extendedProps: { date: t.date, isTask: true, order: 1 + index * 2, task: { kind: t.kind, name: person.name }, tip: `${label}: ${person.name}` },
-        },
-      ]
-    })
-    // Un día en que toca la tarea y no está anotada: con persona recomendada si la hay, y si no un aviso o un lugar marcado
-    const gapEvent = (kind: (typeof TASK_KINDS)[number], index: number, date: string, late: boolean, suggestedId?: string): EventInput => {
-      const person = suggestedId ? peopleById.get(suggestedId) : undefined
-      const order = 2 + index * 2
-      const lateNote = late ? 'Falta anotarla. ' : ''
-      if (person) {
-        return {
-          start: date,
-          allDay: true,
-          title: `${kind.label} · ${person.name}?`,
-          classNames: ['task', 'task-suggested', ...(late ? ['task-late'] : []), ...emphasis(person.id)],
-          backgroundColor: `color-mix(in oklab, ${person.color} 22%, white)`,
-          borderColor: person.color,
-          textColor: 'var(--color-base-content)',
-          extendedProps: {
-            date,
-            isTask: true,
-            order,
-            task: { kind: kind.key, name: `${person.name}?` },
-            tip: `${lateNote}Recomendada para ${kind.label}: ${person.name}, ${kind.key === 'curva' ? 'tuvo quirófano la semana anterior' : 'la siguiente en el orden del quirófano'}. Tocá el día para anotarla.`,
-          },
+      const kind = TASK_KINDS.find((k) => k.key === t.kind)
+      if (person && kind) addSegment(t.date, { kind: t.kind, person, emphasis: emphasis(person.id), tip: `${kind.label}: ${person.name}` })
+    }
+    // Un día en que toca la tarea y no está anotada: con persona recomendada si se muestran las recomendaciones y la hay,
+    // y si no el aviso de que falta. Lo que viene sin anotar solo se marca con las recomendaciones a la vista.
+    for (const { kind, missing, pending, suggestions: suggested } of taskGapsByKind) {
+      for (const [dates, late] of [[missing, true], [pending, false]] as const) {
+        for (const date of dates) {
+          const person = showSuggestions ? peopleById.get(suggested[date] ?? '') : undefined
+          if (!person && !late && !showSuggestions) continue
+          const lateNote = late ? 'Falta anotarla. ' : ''
+          addSegment(date, {
+            kind: kind.key,
+            late,
+            emphasis: person ? emphasis(person.id) : [],
+            ...(person
+              ? {
+                  person,
+                  suggested: true,
+                  tip: `${lateNote}Recomendada para ${kind.label}: ${person.name}, ${kind.key === 'curva' ? 'tuvo quirófano la semana anterior' : 'la siguiente en el orden del quirófano'}. Tocá el día para anotarla.`,
+                }
+              : { tip: `${late ? `Falta anotar la ${kind.label}.` : `Toca ${kind.label} este día.`} Tocá el día para anotarla.` }),
+          })
         }
       }
+    }
+    const taskRows = [...segmentsByDate].map(([date, segments]): EventInput => {
+      segments.sort((x, y) => TASK_KINDS.findIndex((k) => k.key === x.kind) - TASK_KINDS.findIndex((k) => k.key === y.kind))
       return {
         start: date,
         allDay: true,
-        title: late ? `Falta ${kind.label}` : kind.label,
-        classNames: [late ? 'task-missing' : 'task-pending'],
-        extendedProps: {
-          date,
-          isTask: true,
-          order,
-          task: { kind: kind.key, missing: late },
-          tip: `${late ? `Falta anotar la ${kind.label}.` : `Toca ${kind.label} este día.`} Tocá el día para anotarla.`,
-        },
+        classNames: ['task-row'],
+        backgroundColor: 'transparent',
+        borderColor: 'transparent',
+        extendedProps: { date, isTask: true, order: 1, segments },
       }
-    }
-    const gaps = taskGapsByKind.flatMap(({ kind, missing, pending, suggestions }, index) => [
-      ...missing.map((date) => gapEvent(kind, index, date, true, suggestions[date])),
-      ...pending.map((date) => gapEvent(kind, index, date, false, suggestions[date])),
-    ])
+    })
     // La mañana siguiente a una guardia extendida: quién sigue de guardia y hasta qué hora. Tocarla abre la guardia extendida.
     const carried = Object.entries(extensions).flatMap(([date, end]): EventInput[] => {
       const person = peopleById.get(shifts[date] ?? suggestions[date] ?? '')
@@ -329,8 +337,8 @@ export default function CalendarView({
         },
       ]
     })
-    return [...real, ...ghosts, ...carried, ...done, ...gaps]
-  }, [shifts, extensions, suggestions, r1, tasks, taskGapsByKind, peopleById, highlightId, problems, showProblems, unavoidable])
+    return [...real, ...ghosts, ...carried, ...taskRows]
+  }, [shifts, extensions, suggestions, showSuggestions, r1, tasks, taskGapsByKind, peopleById, highlightId, problems, showProblems, unavoidable])
 
   // FullCalendar vuelve a dibujar todo si alguna de sus funciones cambia de identidad: las que dependen del estado
   // llaman a la versión más reciente por una ref, y las demás se memorizan.
@@ -409,7 +417,7 @@ export default function CalendarView({
             />
             Marcar las que perjudican
           </label>
-          <label className="flex cursor-pointer items-center gap-2 text-sm" title="Muestra en cada guardia sin asignar a quién recomienda el balance">
+          <label className="flex cursor-pointer items-center gap-2 text-sm" title="Muestra a quién recomienda el balance en cada guardia sin asignar y en la Curva y el Campo sin anotar">
             <input
               type="checkbox"
               className="toggle toggle-sm toggle-primary"
