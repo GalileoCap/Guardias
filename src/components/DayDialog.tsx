@@ -149,28 +149,37 @@ function HoursRow({ date }: { date: string }) {
           {at(span.start)} a {at(span.end)} · {formatHours((span.end - span.start) / 60)}
         </span>
       </span>
-      <label className="flex items-center gap-2">
-        <span className="text-base-content/70">Extender hasta</span>
-        <select className="select select-sm w-auto" value={extensions[date] ?? ''} onChange={(e) => setExtension(date, e.target.value || null)}>
-          <option value="">No ({NORMAL_END})</option>
-          {extensionEnds.map((t) => (
-            <option key={t} value={t}>
-              {weekday(next)} {t} (+{formatHours(extraHours(date, { extensions: { [date]: t }, advances: {} }))})
-            </option>
-          ))}
-        </select>
-      </label>
-      <label className="flex items-center gap-2">
-        <span className="text-base-content/70">Adelantar al</span>
-        <select className="select select-sm w-auto" value={advances[date] ?? ''} onChange={(e) => setAdvance(date, e.target.value || null)}>
-          <option value="">No</option>
-          {advanceStarts.map((t) => (
-            <option key={t} value={t}>
-              {weekday(prev)} {t} (+{formatHours(extraHours(date, { extensions: {}, advances: { [date]: t } }))})
-            </option>
-          ))}
-        </select>
-      </label>
+      {/* Dos columnas fijas: con las dos cargadas los textos se alargan y, uno al lado del otro, no entran en una línea.
+          Primero el adelanto, que corre el comienzo, y después la extensión, que corre el final. Las horas de más van en el
+          rótulo: en el teléfono el selector no tiene lugar para la hora y las horas juntas. */}
+      <div className="grid w-full grid-cols-2 gap-3">
+        <label className="flex min-w-0 flex-col gap-1">
+          <span className="text-base-content/70">
+            Adelantar al{date in advances && ` · +${formatHours(extraHours(date, { extensions: {}, advances }))}`}
+          </span>
+          <select className="select select-sm w-full" value={advances[date] ?? ''} onChange={(e) => setAdvance(date, e.target.value || null)}>
+            <option value="">No</option>
+            {advanceStarts.map((t) => (
+              <option key={t} value={t}>
+                {weekday(prev)} {t}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label className="flex min-w-0 flex-col gap-1">
+          <span className="text-base-content/70">
+            Extender hasta{date in extensions && ` · +${formatHours(extraHours(date, { extensions, advances: {} }))}`}
+          </span>
+          <select className="select select-sm w-full" value={extensions[date] ?? ''} onChange={(e) => setExtension(date, e.target.value || null)}>
+            <option value="">No ({NORMAL_END})</option>
+            {extensionEnds.map((t) => (
+              <option key={t} value={t}>
+                {weekday(next)} {t}
+              </option>
+            ))}
+          </select>
+        </label>
+      </div>
       {startsLate && (
         <span className="w-full text-xs text-base-content/60">
           Arranca más tarde porque la guardia anterior se extiende. Adelantarla reemplaza esa extensión.
