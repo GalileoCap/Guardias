@@ -1,10 +1,9 @@
-import { CATEGORIES } from '../fairness'
+import { CATEGORIES, evenness } from '../fairness'
 import { useFairness, useHolidayLookup } from '../hooks'
-import { extraHoursByPerson, shiftHoursByPerson } from '../hours'
+import { shiftHoursByPerson } from '../hours'
 import { useStore } from '../store'
 
-const HOURS_HINT = 'Horas de todas sus guardias: 16,5 h un día hábil, 24 h un fin de semana o feriado, más o menos lo que corran las extensiones y los adelantos. No cuentan en la justicia.'
-const EXTRA_HINT = 'Horas de más por extensiones (después de las 8:30) y adelantos (antes de las 8:30). No cuentan en la justicia.'
+const HOURS_HINT = 'Horas de todas sus guardias: 16,5 h un día hábil, 24 h un fin de semana o feriado, más o menos lo que corran las extensiones y los adelantos. Se muestra qué tan parejas están, pero no cuentan en la justicia ni en las recomendaciones.'
 
 const pct = (v: number | null) => (v === null ? '—' : `${Math.round(v * 100)}%`)
 
@@ -40,7 +39,8 @@ export default function FairnessBar({
 }) {
   const people = useStore((s) => s.people).filter((p) => p.active)
   const { counts, fairness } = useFairness()
-  // Las horas de guardia y las extra no entran en la justicia: van como columnas aparte, sin nivel ni color
+  // Las horas de guardia no entran en la justicia: van como columna aparte, con su propio nivel y el rojo de quien
+  // tiene más que el promedio
   const shifts = useStore((s) => s.shifts)
   const extensions = useStore((s) => s.extensions)
   const advances = useStore((s) => s.advances)
@@ -48,8 +48,15 @@ export default function FairnessBar({
   const holiday = useHolidayLookup()
   const relays = { extensions, advances }
   const hours = shiftHoursByPerson(people, shifts, relays, settings, holiday)
-  const extra = extraHoursByPerson(people, shifts, relays, settings)
+  const hoursEvenness = evenness(people.map((p) => hours[p.id]))
+  const hoursMean = people.length ? people.reduce((sum, p) => sum + hours[p.id], 0) / people.length : 0
+  // Igual que en las demás columnas: cuánto más que el promedio, medido en promedios
+  const hoursBurden = (id: string) => (hoursMean > 0 ? Math.min(1, (hours[id] - hoursMean) / hoursMean) : 0)
   const hoursLabel = (h: number) => h.toLocaleString('es-AR', { maximumFractionDigits: 2 })
+  const hoursTip = (id: string) => {
+    const delta = hours[id] - hoursMean
+    return `Promedio: ${hoursLabel(Math.round(hoursMean * 10) / 10)} h` + (Math.abs(delta) < 0.05 ? '' : ` (${delta > 0 ? '+' : ''}${hoursLabel(Math.round(delta * 10) / 10)} h)`)
+  }
 
   if (people.length === 0) {
     return (
@@ -154,21 +161,24 @@ export default function FairnessBar({
                   ))}
                 </tr>
               ))}
-              {[
-                { label: 'Horas de guardia', hint: HOURS_HINT, values: hours },
-                { label: 'Horas extra', hint: EXTRA_HINT, values: extra },
-              ].map((row) => (
-                <tr key={row.label}>
-                  <th className="px-2 text-left font-medium leading-tight" title={row.hint}>
-                    {row.label}
-                  </th>
-                  {people.map((p) => (
-                    <td key={p.id} className="px-1" style={{ background: highlightId === p.id ? 'var(--color-base-200)' : undefined }}>
-                      <span className="text-lg font-semibold">{hoursLabel(row.values[p.id])}</span>
-                    </td>
-                  ))}
-                </tr>
-              ))}
+              <tr>
+                <th className="px-2 text-left font-medium leading-tight" title={HOURS_HINT}>
+                  <div>Horas de guardia</div>
+                  <div className="mt-1">
+                    <Level value={hoursEvenness} size="badge-xs" />
+                  </div>
+                </th>
+                {people.map((p) => (
+                  <td
+                    key={p.id}
+                    className="px-1"
+                    title={hoursTip(p.id)}
+                    style={{ background: tint(hoursBurden(p.id)) ?? (highlightId === p.id ? 'var(--color-base-200)' : undefined) }}
+                  >
+                    <span className="text-lg font-semibold">{hoursLabel(hours[p.id])}</span>
+                  </td>
+                ))}
+              </tr>
             </tbody>
           </table>
         </div>
@@ -186,11 +196,11 @@ export default function FairnessBar({
                     </div>
                   </th>
                 ))}
-                <th title={HOURS_HINT} className="align-top font-medium">
-                  Horas de guardia
-                </th>
-                <th title={EXTRA_HINT} className="align-top font-medium">
-                  Horas extra
+                <th title={HOURS_HINT} className="font-medium">
+                  <div>Horas de guardia</div>
+                  <div className="mt-1">
+                    <Level value={hoursEvenness} size="badge-xs" />
+                  </div>
                 </th>
               </tr>
             </thead>
@@ -227,11 +237,8 @@ export default function FairnessBar({
                       </td>
                     )
                   })}
-                  <td>
+                  <td title={hoursTip(p.id)} style={{ background: tint(hoursBurden(p.id)) }}>
                     <span className="text-lg font-semibold">{hoursLabel(hours[p.id])}</span>
-                  </td>
-                  <td>
-                    <span className="text-lg font-semibold">{hoursLabel(extra[p.id])}</span>
                   </td>
                 </tr>
               ))}

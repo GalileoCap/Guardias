@@ -46,20 +46,6 @@ export const extraHours = (date: string, { extensions, advances }: Relays) =>
   60
 
 /**
- * Horas extra de cada persona: la suma de las extensiones y los adelantos de sus guardias dentro de "contar desde".
- * Una guardia sin asignar no suma a nadie.
- */
-export function extraHoursByPerson(people: Person[], shifts: Shifts, relays: Relays, settings: Settings): Record<string, number> {
-  const out: Record<string, number> = Object.fromEntries(people.map((p) => [p.id, 0]))
-  for (const date of new Set([...Object.keys(relays.extensions), ...Object.keys(relays.advances)])) {
-    const personId = shifts[date]
-    if (!personId || !(personId in out) || !inWindow(date, settings)) continue
-    out[personId] += extraHours(date, relays)
-  }
-  return out
-}
-
-/**
  * Horas de guardia de cada persona dentro de "contar desde": la duración de cada una de sus guardias, con su horario de
  * día hábil o de día entero y lo que corren las extensiones y los adelantos. Una guardia sin asignar no suma a nadie.
  */
