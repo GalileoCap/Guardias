@@ -38,7 +38,7 @@ export const extraHours = (date: string, extensions: Extensions) =>
   date in extensions ? (minutesOf(extensions[date]) - minutesOf(NORMAL_END)) / 60 : 0
 
 /**
- * Horas extra de cada persona: la suma de las extensiones de sus guardias dentro de "contar desde", sin `exclude`.
+ * Horas extra de cada persona: la suma de las extensiones de sus guardias dentro de "contar desde".
  * Una guardia sin asignar no suma a nadie.
  */
 export function extraHoursByPerson(
@@ -46,12 +46,11 @@ export function extraHoursByPerson(
   shifts: Shifts,
   extensions: Extensions,
   settings: Settings,
-  exclude?: string,
 ): Record<string, number> {
   const out: Record<string, number> = Object.fromEntries(people.map((p) => [p.id, 0]))
   for (const date of Object.keys(extensions)) {
     const personId = shifts[date]
-    if (date === exclude || !personId || !(personId in out) || !inWindow(date, settings)) continue
+    if (!personId || !(personId in out) || !inWindow(date, settings)) continue
     out[personId] += extraHours(date, extensions)
   }
   return out

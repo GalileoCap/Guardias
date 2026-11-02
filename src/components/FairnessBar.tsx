@@ -1,8 +1,9 @@
 import { CATEGORIES } from '../fairness'
 import { useFairness } from '../hooks'
-import { extraHoursByPerson, formatHours } from '../hours'
+import { extraHoursByPerson } from '../hours'
 import { useStore } from '../store'
-import type { Person } from '../types'
+
+const EXTRA_HINT = 'Horas que pasan de las 8:30 por guardias extendidas. No cuentan en la justicia.'
 
 const pct = (v: number | null) => (v === null ? '—' : `${Math.round(v * 100)}%`)
 
@@ -29,39 +30,6 @@ function Level({ value, size = 'badge-sm' }: { value: number | null; size?: stri
   )
 }
 
-/**
- * Horas extra de cada persona por guardias extendidas. No cuentan en la justicia: se muestran para que la próxima
- * extensión le toque a quien menos tiene. Sin ninguna extensión no aparece.
- */
-function ExtraHours({ people }: { people: Person[] }) {
-  const shifts = useStore((s) => s.shifts)
-  const extensions = useStore((s) => s.extensions)
-  const settings = useStore((s) => s.settings)
-  if (Object.keys(extensions).length === 0) return null
-  const hours = extraHoursByPerson(people, shifts, extensions, settings)
-  const fewest = Math.min(...people.map((p) => hours[p.id]))
-  const next = people.filter((p) => hours[p.id] === fewest)
-  return (
-    <div className="card card-border bg-base-100">
-      <div className="card-body gap-2 p-3">
-        <div className="text-xs uppercase tracking-wide text-base-content/60">Horas extra</div>
-        <div className="flex flex-wrap gap-x-4 gap-y-1">
-          {people.map((p) => (
-            <span key={p.id} className="flex items-center gap-2 text-sm">
-              <span className="inline-block size-3 rounded-full" style={{ background: p.color }} />
-              {p.name}
-              <span className="font-semibold">{formatHours(hours[p.id])}</span>
-            </span>
-          ))}
-        </div>
-        {next.length < people.length && (
-          <p className="text-xs text-base-content/60">La próxima extensión le toca a {next.map((p) => p.name).join(' o ')}.</p>
-        )}
-      </div>
-    </div>
-  )
-}
-
 export default function FairnessBar({
   highlightId,
   onHighlight,
@@ -71,6 +39,12 @@ export default function FairnessBar({
 }) {
   const people = useStore((s) => s.people).filter((p) => p.active)
   const { counts, fairness } = useFairness()
+  // Las horas extra no entran en la justicia: van como columna aparte, sin nivel ni color
+  const shifts = useStore((s) => s.shifts)
+  const extensions = useStore((s) => s.extensions)
+  const settings = useStore((s) => s.settings)
+  const extra = extraHoursByPerson(people, shifts, extensions, settings)
+  const extraLabel = (id: string) => extra[id].toLocaleString('es-AR', { maximumFractionDigits: 2 })
 
   if (people.length === 0) {
     return (
@@ -175,6 +149,16 @@ export default function FairnessBar({
                   ))}
                 </tr>
               ))}
+              <tr>
+                <th className="px-2 text-left font-medium leading-tight" title={EXTRA_HINT}>
+                  Horas extra
+                </th>
+                {people.map((p) => (
+                  <td key={p.id} className="px-1" style={{ background: highlightId === p.id ? 'var(--color-base-200)' : undefined }}>
+                    <span className="text-lg font-semibold">{extraLabel(p.id)}</span>
+                  </td>
+                ))}
+              </tr>
             </tbody>
           </table>
         </div>
@@ -192,6 +176,9 @@ export default function FairnessBar({
                     </div>
                   </th>
                 ))}
+                <th title={EXTRA_HINT} className="align-top font-medium">
+                  Horas extra
+                </th>
               </tr>
             </thead>
             <tbody>
@@ -227,6 +214,9 @@ export default function FairnessBar({
                       </td>
                     )
                   })}
+                  <td>
+                    <span className="text-lg font-semibold">{extraLabel(p.id)}</span>
+                  </td>
                 </tr>
               ))}
             </tbody>
@@ -236,8 +226,6 @@ export default function FairnessBar({
           Rojo: le toca más que al promedio (en Findes libres, tener menos es lo peor).
         </p>
       </div>
-
-      <ExtraHours people={people} />
     </div>
   )
 }

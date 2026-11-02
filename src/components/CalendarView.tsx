@@ -4,6 +4,8 @@ import type { DateClickArg } from '@fullcalendar/interaction'
 import dayGridPlugin from '@fullcalendar/daygrid'
 import interactionPlugin from '@fullcalendar/interaction'
 import FullCalendar from '@fullcalendar/react'
+import { format, parseISO } from 'date-fns'
+import { es } from 'date-fns/locale'
 import { useCallback, useMemo, useRef, useState } from 'react'
 import { addDaysTo, isoOf, mondayOf } from '../dates'
 import { hasIssue, rankCandidates, rotationOrder, scoreShifts } from '../fairness'
@@ -34,12 +36,23 @@ const EVENT_ORDER = 'order,title'
 
 // El motivo de cada guardia que perjudica va como tooltip del evento
 const renderEvent = (arg: EventContentArg) => {
-  const { problems, soft, tip, task, extension } = arg.event.extendedProps as {
+  const { problems, soft, tip, task, extension, carry } = arg.event.extendedProps as {
     problems?: string[]
     soft?: boolean
     tip?: string
     task?: { kind: TaskKind; missing?: boolean; name?: string }
     extension?: { end: string; hours: number }
+    carry?: { end: string; name: string }
+  }
+  if (carry) {
+    // En el teléfono queda el ícono y la hora
+    return (
+      <span title={tip} className="block truncate">
+        <Icon name="extension" className="mr-0.5 size-2.5 -translate-y-px sm:mr-1 sm:size-3" />
+        <span className="hidden sm:inline">{carry.name} hasta </span>
+        {carry.end}
+      </span>
+    )
   }
   if (task) {
     // En el teléfono las celdas son angostas: la palabra "Curva" o "Campo" se esconde y queda el ícono
@@ -293,7 +306,30 @@ export default function CalendarView({
       ...missing.map((date) => gapEvent(kind, index, date, true, suggestions[date])),
       ...pending.map((date) => gapEvent(kind, index, date, false, suggestions[date])),
     ])
-    return [...real, ...ghosts, ...done, ...gaps]
+    // La mañana siguiente a una guardia extendida: quién sigue de guardia y hasta qué hora. Tocarla abre la guardia extendida.
+    const carried = Object.entries(extensions).flatMap(([date, end]): EventInput[] => {
+      const person = peopleById.get(shifts[date] ?? suggestions[date] ?? '')
+      const name = person ? person.name : 'Sin asignar'
+      return [
+        {
+          start: addDaysTo(date, 1),
+          allDay: true,
+          title: `${name} hasta ${end}`,
+          classNames: ['task', ...(person ? emphasis(person.id) : [])],
+          backgroundColor: person ? `color-mix(in oklab, ${person.color} 22%, white)` : undefined,
+          borderColor: person?.color,
+          textColor: 'var(--color-base-content)',
+          extendedProps: {
+            date,
+            isTask: true,
+            order: 0.5,
+            carry: { end, name },
+            tip: `Sigue la guardia del ${format(parseISO(date), 'EEEE d', { locale: es })} (${name}) hasta las ${end}. Tocá para cambiarla.`,
+          },
+        },
+      ]
+    })
+    return [...real, ...ghosts, ...carried, ...done, ...gaps]
   }, [shifts, extensions, suggestions, r1, tasks, taskGapsByKind, peopleById, highlightId, problems, showProblems, unavoidable])
 
   // FullCalendar vuelve a dibujar todo si alguna de sus funciones cambia de identidad: las que dependen del estado

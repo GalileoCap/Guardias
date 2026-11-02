@@ -5,7 +5,7 @@ import { addDaysTo, isoOf, mondayOf } from '../dates'
 import { taskKey } from '../data'
 import { CATEGORIES, categoriesOf, hasIssue, rankCandidates, rotationOrder } from '../fairness'
 import { useHolidayLookup, useIgnoreGhostClick, useProblems, useQuirofano } from '../hooks'
-import { NORMAL_END, extraHours, extraHoursByPerson, formatHours, minutesOf, shiftSpan, timeOf } from '../hours'
+import { NORMAL_END, extraHours, formatHours, minutesOf, shiftSpan, timeOf } from '../hours'
 import { useStore } from '../store'
 import { TASK_KINDS, campoPlan, curvaDefault, taskGaps, weeksFromCampoStart } from '../tasks'
 import type { TaskKind } from '../types'
@@ -164,7 +164,7 @@ function HoursRow({ date }: { date: string }) {
 const tint = (color: string) => `color-mix(in oklab, ${color} 18%, transparent)`
 
 export default function DayDialog({ date, onClose }: { date: string; onClose: () => void }) {
-  const { people, shifts, extensions, settings, setShift, removeShift } = useStore()
+  const { people, shifts, settings, setShift, removeShift } = useStore()
   const ghostGuard = useIgnoreGhostClick()
   const quirofano = useQuirofano()
   const holiday = useHolidayLookup()
@@ -184,16 +184,6 @@ export default function DayDialog({ date, onClose }: { date: string; onClose: ()
     () => rankCandidates(date, people, shifts, quirofano, settings, holiday),
     [date, people, shifts, quirofano, settings, holiday],
   )
-
-  // Con la guardia extendida, las horas extra de cada una sin contar esta, y quién tiene menos
-  const extended = date in extensions
-  const extra = useMemo(
-    () => (extended ? extraHoursByPerson(people, shifts, extensions, settings, date) : null),
-    [extended, people, shifts, extensions, settings, date],
-  )
-  // Si todas tienen lo mismo no se marca a nadie
-  const extraValues = extra ? candidates.map((c) => extra[c.person.id]) : []
-  const fewestExtra = new Set(extraValues).size > 1 ? Math.min(...extraValues) : null
 
   const assign = (personId: string | null) => {
     setShift(date, personId)
@@ -252,9 +242,6 @@ export default function DayDialog({ date, onClose }: { date: string; onClose: ()
                       <span className="badge badge-warning badge-sm">{c.gaps.before === 1 ? 'guardia ayer' : 'guardia mañana'}</span>
                     )}
                     {c.newSandwich > 0 && <span className="badge badge-warning badge-sm">sanguchito</span>}
-                    {extra && fewestExtra !== null && extra[c.person.id] === fewestExtra && (
-                      <span className="badge badge-info badge-soft badge-sm">menos horas extra</span>
-                    )}
                     {c.around === 'prefer' && <span className="badge badge-info badge-soft badge-sm">cerca de su quirófano</span>}
                     {c.weekend && c.weekend.streaks > 0 && (
                       <span className="badge badge-warning badge-sm">
@@ -266,7 +253,6 @@ export default function DayDialog({ date, onClose }: { date: string; onClose: ()
                     {[
                       ...shown.map((cat) => `${cat.short} ${c.counts[cat.key]}`),
                       ...(isWeekend ? [`Libres ${c.counts.freeWeekends}`, `Seguidos ${c.counts.consecutive}`] : []),
-                      ...(extra ? [`Horas extra ${formatHours(extra[c.person.id])}`] : []),
                     ].join(' · ')}
                     {nearestLabel(c.gaps.before, c.gaps.after)}
                   </span>
