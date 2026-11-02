@@ -1,9 +1,10 @@
 import { CATEGORIES } from '../fairness'
-import { useFairness } from '../hooks'
-import { extraHoursByPerson } from '../hours'
+import { useFairness, useHolidayLookup } from '../hooks'
+import { extraHoursByPerson, shiftHoursByPerson } from '../hours'
 import { useStore } from '../store'
 
-const EXTRA_HINT = 'Horas que pasan de las 8:30 por guardias extendidas. No cuentan en la justicia.'
+const HOURS_HINT = 'Horas de todas sus guardias: 16,5 h un día hábil, 24 h un fin de semana o feriado, más o menos lo que corran las extensiones y los adelantos. No cuentan en la justicia.'
+const EXTRA_HINT = 'Horas de más por extensiones (después de las 8:30) y adelantos (antes de las 8:30). No cuentan en la justicia.'
 
 const pct = (v: number | null) => (v === null ? '—' : `${Math.round(v * 100)}%`)
 
@@ -39,13 +40,16 @@ export default function FairnessBar({
 }) {
   const people = useStore((s) => s.people).filter((p) => p.active)
   const { counts, fairness } = useFairness()
-  // Las horas extra no entran en la justicia: van como columna aparte, sin nivel ni color
+  // Las horas de guardia y las extra no entran en la justicia: van como columnas aparte, sin nivel ni color
   const shifts = useStore((s) => s.shifts)
   const extensions = useStore((s) => s.extensions)
   const advances = useStore((s) => s.advances)
   const settings = useStore((s) => s.settings)
-  const extra = extraHoursByPerson(people, shifts, { extensions, advances }, settings)
-  const extraLabel = (id: string) => extra[id].toLocaleString('es-AR', { maximumFractionDigits: 2 })
+  const holiday = useHolidayLookup()
+  const relays = { extensions, advances }
+  const hours = shiftHoursByPerson(people, shifts, relays, settings, holiday)
+  const extra = extraHoursByPerson(people, shifts, relays, settings)
+  const hoursLabel = (h: number) => h.toLocaleString('es-AR', { maximumFractionDigits: 2 })
 
   if (people.length === 0) {
     return (
@@ -150,16 +154,21 @@ export default function FairnessBar({
                   ))}
                 </tr>
               ))}
-              <tr>
-                <th className="px-2 text-left font-medium leading-tight" title={EXTRA_HINT}>
-                  Horas extra
-                </th>
-                {people.map((p) => (
-                  <td key={p.id} className="px-1" style={{ background: highlightId === p.id ? 'var(--color-base-200)' : undefined }}>
-                    <span className="text-lg font-semibold">{extraLabel(p.id)}</span>
-                  </td>
-                ))}
-              </tr>
+              {[
+                { label: 'Horas de guardia', hint: HOURS_HINT, values: hours },
+                { label: 'Horas extra', hint: EXTRA_HINT, values: extra },
+              ].map((row) => (
+                <tr key={row.label}>
+                  <th className="px-2 text-left font-medium leading-tight" title={row.hint}>
+                    {row.label}
+                  </th>
+                  {people.map((p) => (
+                    <td key={p.id} className="px-1" style={{ background: highlightId === p.id ? 'var(--color-base-200)' : undefined }}>
+                      <span className="text-lg font-semibold">{hoursLabel(row.values[p.id])}</span>
+                    </td>
+                  ))}
+                </tr>
+              ))}
             </tbody>
           </table>
         </div>
@@ -177,6 +186,9 @@ export default function FairnessBar({
                     </div>
                   </th>
                 ))}
+                <th title={HOURS_HINT} className="align-top font-medium">
+                  Horas de guardia
+                </th>
                 <th title={EXTRA_HINT} className="align-top font-medium">
                   Horas extra
                 </th>
@@ -216,7 +228,10 @@ export default function FairnessBar({
                     )
                   })}
                   <td>
-                    <span className="text-lg font-semibold">{extraLabel(p.id)}</span>
+                    <span className="text-lg font-semibold">{hoursLabel(hours[p.id])}</span>
+                  </td>
+                  <td>
+                    <span className="text-lg font-semibold">{hoursLabel(extra[p.id])}</span>
                   </td>
                 </tr>
               ))}

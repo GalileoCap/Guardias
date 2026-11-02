@@ -59,6 +59,26 @@ export function extraHoursByPerson(people: Person[], shifts: Shifts, relays: Rel
   return out
 }
 
+/**
+ * Horas de guardia de cada persona dentro de "contar desde": la duración de cada una de sus guardias, con su horario de
+ * día hábil o de día entero y lo que corren las extensiones y los adelantos. Una guardia sin asignar no suma a nadie.
+ */
+export function shiftHoursByPerson(
+  people: Person[],
+  shifts: Shifts,
+  relays: Relays,
+  settings: Settings,
+  holiday: HolidayLookup,
+): Record<string, number> {
+  const out: Record<string, number> = Object.fromEntries(people.map((p) => [p.id, 0]))
+  for (const [date, personId] of Object.entries(shifts)) {
+    if (!personId || !(personId in out) || !inWindow(date, settings)) continue
+    const { start, end } = shiftSpan(date, relays, holiday)
+    out[personId] += (end - start) / 60
+  }
+  return out
+}
+
 /** Extiende la guardia de `date` hasta `end` del día siguiente (null la deja terminar a las 8:30). Reemplaza al adelanto de la siguiente: es el mismo relevo. */
 export function withExtension({ extensions, advances }: Relays, date: string, end: string | null): Relays {
   const { [date]: _, ...rest } = extensions
