@@ -21,7 +21,7 @@ Las reglas globales de `~/.claude/CLAUDE.md` rigen acá. Lo que sigue las comple
 ## Deploy
 
 - Se despliega solo con `./deploy.sh` (host `opal`, https://guardias.smplworks.net) y solo cuando se pide. El script baja antes un backup de los datos de producción a `backups/` (ignorada por git) y aborta si falla. Ningún otro camino de deploy sin ese backup.
-- Detalles de operación en `DEPLOY.md`.
+- Detalles de operación en `DEPLOY.md`. Cómo el servidor duerme sin pedidos (activación por socket de systemd), para copiarlo a otras apps: `docs/idle-socket-activation.md`.
 
 ## Git
 
