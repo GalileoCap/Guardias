@@ -21,7 +21,6 @@ const DAY = 24 * 60
 export const isFullDay = (date: string, holiday: HolidayLookup) => [0, 6].includes(dayOfWeek(date)) || !!holiday(date)
 
 /**
-/**
  * Horario de la guardia de `date`, en minutos desde la medianoche de ese día (`end` cae al día siguiente, así que pasa
  * de 24 h; un adelanto hace `start` negativo). Si la guardia del día anterior se extendió más allá de cuando empezaría
  * esta, esta arranca cuando aquella termina; si la siguiente se adelanta, esta termina cuando aquella arranca.
