@@ -99,8 +99,9 @@ body::before {
 .fc .fc-button { border-radius: 9999px; font-weight: 700; text-transform: capitalize; }
 .fc .fc-col-header-cell-cushion { color: color-mix(in oklab, var(--color-primary) 75%, var(--color-base-content)); font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.06em; padding: 6px 4px; }
 .fc .fc-scrollgrid { border-radius: 0.9rem; overflow: hidden; }
-.fc .fc-day-today .fc-daygrid-day-number { background: var(--color-primary); color: var(--color-primary-content); border-radius: 9999px; margin: 3px; padding: 1px 7px; }
-.fc .fc-daygrid-day-number { color: var(--color-base-content); }
+/* El círculo de hoy va en el número solo, no en el nombre del feriado que lo acompaña */
+.fc .fc-day-today .day-num { background: var(--color-primary); color: var(--color-primary-content); border-radius: 9999px; padding: 1px 7px; }
+.fc .fc-daygrid-day-number { color: var(--color-base-content); min-width: 0; max-width: 100%; }
 .fc .fc-day-other .fc-daygrid-day-top { opacity: 0.45; }
 .fc .fc-toolbar-title::first-letter { text-transform: uppercase; }
 .fc .fc-daygrid-day { cursor: pointer; }
@@ -128,6 +129,7 @@ body::before {
 .fc .fc-event.task-row { padding: 0; border: 0; background: transparent; }
 .task-seg {
   display: inline-flex;
+  flex: 1 1 0;
   min-width: 0;
   align-items: center;
   gap: 0.25rem;
@@ -181,7 +183,7 @@ body::before {
   .fc .fc-col-header-cell-cushion { font-size: 0.62rem; letter-spacing: 0; padding: 4px 0; }
   .fc .fc-daygrid-day-frame { min-height: 4.4rem; }
   .fc .fc-daygrid-day-number { font-size: 0.78rem; padding: 2px 4px; }
-  .fc .fc-day-today .fc-daygrid-day-number { margin: 2px; padding: 0 5px; }
+  .fc .fc-day-today .day-num { padding: 0 5px; }
   .fc .fc-event { font-size: 0.66rem; padding: 1px 2px; text-align: center; }
   .fc .fc-event.task { font-size: 0.58rem; padding: 0 2px; }
   .fc .fc-event.task-row { padding: 0; }

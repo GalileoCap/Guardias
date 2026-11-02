@@ -48,10 +48,10 @@ type TaskSegment = {
 const segmentClass = ({ person, suggested, late, emphasis }: TaskSegment) =>
   ['task-seg', ...(person ? (suggested ? ['task-seg-suggested'] : []) : [late ? 'task-seg-missing' : 'task-seg-pending']), ...(person && late ? ['task-seg-late'] : []), ...emphasis].join(' ')
 
-// Curva y Campo de un día en una sola fila: el ícono dice la tarea y el color la persona, así que el nombre de la tarea
-// no se escribe. En el teléfono queda solo el ícono.
+// Curva y Campo de un día en una sola fila que se reparten el ancho de la celda: el ícono dice la tarea y el color la
+// persona, así que el nombre de la tarea no se escribe. En el teléfono queda solo el ícono.
 const renderTasks = (segments: TaskSegment[]) => (
-  <span className="flex min-w-0 gap-1">
+  <span className="flex w-full min-w-0 gap-1">
     {segments.map((seg) => (
       <span
         key={seg.kind}
@@ -407,9 +407,10 @@ export default function CalendarView({
       const name = holiday(iso(arg.date))
       return {
         html:
-          '<div class="flex flex-col items-end">' +
-          `<span>${escapeHtml(arg.dayNumberText)}</span>` +
-          (name ? `<span class="hidden max-w-24 truncate text-[10px] text-error sm:block" title="${escapeHtml(name)}">${escapeHtml(name)}</span>` : '') +
+          // El nombre del feriado va a la izquierda del número, en la misma línea
+          '<div class="flex min-w-0 items-baseline justify-end gap-1.5">' +
+          (name ? `<span class="hidden min-w-0 truncate text-[11px] text-error sm:block" title="${escapeHtml(name)}">${escapeHtml(name)}</span>` : '') +
+          `<span class="day-num shrink-0">${escapeHtml(arg.dayNumberText)}</span>` +
           '</div>',
       }
     },
