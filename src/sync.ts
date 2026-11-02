@@ -1,5 +1,5 @@
 import { create } from 'zustand'
-import { applyPatch, diff, emptyData, normalize } from './data'
+import { applyPatch, dataOf, diff, emptyData, normalize } from './data'
 import { GROUP, newGroupId } from './group'
 import { useStore } from './store'
 import type { AppData } from './types'
@@ -20,10 +20,7 @@ const API = `${import.meta.env.BASE_URL}api/g`
 const POLL_MS = 60_000
 const PUSH_DELAY_MS = 700
 
-const snap = (): AppData => {
-  const { people, shifts, quirofano, tasks, taskDays, extensions, settings } = useStore.getState()
-  return { people, shifts, quirofano, tasks, taskDays, extensions, settings }
-}
+const snap = (): AppData => dataOf(useStore.getState())
 
 type SyncState = { rev: number; base: AppData }
 const KEY = `guardias-sync-${GROUP}`

@@ -42,8 +42,9 @@ export default function FairnessBar({
   // Las horas extra no entran en la justicia: van como columna aparte, sin nivel ni color
   const shifts = useStore((s) => s.shifts)
   const extensions = useStore((s) => s.extensions)
+  const advances = useStore((s) => s.advances)
   const settings = useStore((s) => s.settings)
-  const extra = extraHoursByPerson(people, shifts, extensions, settings)
+  const extra = extraHoursByPerson(people, shifts, { extensions, advances }, settings)
   const extraLabel = (id: string) => extra[id].toLocaleString('es-AR', { maximumFractionDigits: 2 })
 
   if (people.length === 0) {

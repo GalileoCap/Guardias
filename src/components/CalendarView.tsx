@@ -12,7 +12,7 @@ import { hasIssue, rankCandidates, rotationOrder, scoreShifts } from '../fairnes
 import { TASK_KINDS, campoPlan, suggestCurva, taskGaps, weeksFromCampoStart } from '../tasks'
 import { suggestAssignments } from '../search'
 import { contrastText, useHolidayLookup, useProblems, useQuirofano } from '../hooks'
-import { extraHours, formatHours } from '../hours'
+import { atTime, extraHours, formatHours, hourOf, shiftSpan } from '../hours'
 import { useStore } from '../store'
 import type { TaskKind } from '../types'
 import ApplyDialog, { type Reshuffle } from './ApplyDialog'
@@ -78,32 +78,34 @@ const renderTasks = (segments: TaskSegment[]) => (
   </span>
 )
 
+// Cómo corren los relevos a una guardia: horas extra (extensión o adelanto) y desde o hasta qué hora va si la anterior
+// se extiende o la siguiente se adelanta
+type Relay = { extra: number; from?: string; until?: string; tip: string }
+
+const relayText = ({ from, until }: Relay) =>
+  from && until ? ` de ${hourOf(from)} a ${hourOf(until)}` : from ? ` desde ${atTime(from)}` : until ? ` hasta ${atTime(until)}` : ''
+
 // El motivo de cada guardia que perjudica va como tooltip del evento
 const renderEvent = (arg: EventContentArg) => {
-  const { problems, tip, segments, extension, carry } = arg.event.extendedProps as {
+  const { problems, tip, segments, relay, handover } = arg.event.extendedProps as {
     problems?: string[]
     tip?: string
     segments?: TaskSegment[]
-    extension?: { end: string; hours: number }
-    carry?: { end: string; name: string }
+    relay?: Relay
+    handover?: { text: string; time: string }
   }
-  if (carry) {
+  if (handover) {
     // En el teléfono queda el ícono y la hora
     return (
       <span title={tip} className="block truncate">
         <Icon name="extension" className="mr-0.5 size-2.5 -translate-y-px sm:mr-1 sm:size-3" />
-        <span className="hidden sm:inline">{carry.name} hasta </span>
-        {carry.end}
+        <span className="hidden sm:inline">{handover.text}</span>
+        <span className="sm:hidden">{handover.time}</span>
       </span>
     )
   }
   if (segments) return renderTasks(segments)
-  const tooltip = [
-    tip ?? problems?.join('\n'),
-    extension && `Extendida hasta las ${extension.end} del día siguiente (+${formatHours(extension.hours)})`,
-  ]
-    .filter(Boolean)
-    .join('\n')
+  const tooltip = [tip ?? problems?.join('\n'), relay?.tip].filter(Boolean).join('\n')
   return (
     <span title={tooltip || undefined} className="block truncate">
       {problems?.length ? (
@@ -113,9 +115,10 @@ const renderEvent = (arg: EventContentArg) => {
       ) : (
         ''
       )}
-      {extension && <Icon name="extension" className="mr-0.5 size-3 -translate-y-px" />}
+      {!!relay?.extra && <Icon name="extension" className="mr-0.5 size-3 -translate-y-px" />}
       {arg.event.title}
-      {extension && <span className="hidden sm:inline"> +{formatHours(extension.hours)}</span>}
+      {relay && <span className="hidden sm:inline">{relayText(relay)}</span>}
+      {!!relay?.extra && <span className="hidden sm:inline"> +{formatHours(relay.extra)}</span>}
     </span>
   )
 }
@@ -127,7 +130,7 @@ export default function CalendarView({
   highlightId: string | null
   onHighlight: (id: string | null) => void
 }) {
-  const { people, shifts, quirofano: manualQuirofano, tasks, taskDays, extensions, settings, setShift, setShifts, setTasks, removeShift } = useStore()
+  const { people, shifts, quirofano: manualQuirofano, tasks, taskDays, extensions, advances, settings, setShift, setShifts, setTasks, removeShift } = useStore()
   const r1 = settings.mode === 'r1' // quirófano, Curva y Campo solo en R1
   const holiday = useHolidayLookup()
   const [mode, setMode] = useState<Mode>('assign')
@@ -234,7 +237,25 @@ export default function CalendarView({
   const applicableCount = Object.keys(inMonth).length + taskCount
 
   const events = useMemo<EventInput[]>(() => {
-    const extensionOf = (date: string) => (date in extensions ? { end: extensions[date], hours: extraHours(date, extensions) } : undefined)
+    const relays = { extensions, advances }
+    const dayName = (date: string) => format(parseISO(date), 'EEEE', { locale: es })
+    const relayOf = (date: string): Relay | undefined => {
+      const extra = extraHours(date, relays)
+      const late = shiftSpan(date, relays, holiday).start > shiftSpan(date, { extensions: {}, advances: {} }, holiday).start
+      const from = late ? extensions[addDaysTo(date, -1)] : undefined
+      const until = advances[addDaysTo(date, 1)]
+      if (!extra && !from && !until) return undefined
+      const tip = [
+        date in extensions && `Extendida hasta ${atTime(extensions[date])} del ${dayName(addDaysTo(date, 1))}`,
+        date in advances && `Adelantada: arranca el ${dayName(addDaysTo(date, -1))} a ${atTime(advances[date])}`,
+        extra && `+${formatHours(extra)} de horas extra`,
+        from && `Arranca a ${atTime(from)} porque la guardia anterior se extiende`,
+        until && `Termina a ${atTime(until)} porque la guardia siguiente se adelanta`,
+      ]
+        .filter(Boolean)
+        .join('\n')
+      return { extra, from, until, tip }
+    }
     const emphasis = (personId: string | null | undefined) =>
       highlightId ? [personId === highlightId ? 'highlighted' : 'dimmed'] : []
 
@@ -250,7 +271,7 @@ export default function CalendarView({
           allDay: true,
           title: person ? person.name : 'Sin asignar',
           classNames: [...(person ? [] : ['unassigned']), ...emphasis(personId), ...(flagged ? ['problem'] : [])],
-          extendedProps: { problems: flagged, order: 0, extension: extensionOf(date) },
+          extendedProps: { problems: flagged, order: 0, relay: relayOf(date) },
           ...(person && {
             backgroundColor: person.color,
             borderColor: person.color,
@@ -269,7 +290,7 @@ export default function CalendarView({
         backgroundColor: person.color,
         borderColor: person.color,
         textColor: contrastText(person.color),
-        extendedProps: { date, order: 0, extension: extensionOf(date), tip: `Recomendada: ${person.name}. Tocá el día para elegir a otra persona.` },
+        extendedProps: { date, order: 0, relay: relayOf(date), tip: `Recomendada: ${person.name}. Tocá el día para elegir a otra persona.` },
       }
     })
     // Curva y Campo de cada día, en el orden de TASK_KINDS
@@ -314,31 +335,38 @@ export default function CalendarView({
         extendedProps: { date, isTask: true, order: 1, segments },
       }
     })
-    // La mañana siguiente a una guardia extendida: quién sigue de guardia y hasta qué hora. Tocarla abre la guardia extendida.
-    const carried = Object.entries(extensions).flatMap(([date, end]): EventInput[] => {
+    // El día del relevo corrido, la guardia que no es de ese día: arriba quién sigue de una extendida, abajo quién arranca
+    // una adelantada. Tocarla abre esa guardia.
+    const handover = (date: string, day: string, time: string, ends: boolean): EventInput => {
       const person = peopleById.get(shifts[date] ?? suggestions[date] ?? '')
       const name = person ? person.name : 'Sin asignar'
-      return [
-        {
-          start: addDaysTo(date, 1),
-          allDay: true,
-          title: `${name} hasta ${end}`,
-          classNames: ['task', ...(person ? emphasis(person.id) : [])],
-          backgroundColor: person ? `color-mix(in oklab, ${person.color} 22%, white)` : undefined,
-          borderColor: person?.color,
-          textColor: 'var(--color-base-content)',
-          extendedProps: {
-            date,
-            isTask: true,
-            order: 0.5,
-            carry: { end, name },
-            tip: `Sigue la guardia del ${format(parseISO(date), 'EEEE d', { locale: es })} (${name}) hasta las ${end}. Tocá para cambiarla.`,
-          },
+      const text = `${name} ${ends ? 'hasta' : 'desde'} ${atTime(time)}`
+      const when = format(parseISO(date), 'EEEE d', { locale: es })
+      return {
+        start: day,
+        allDay: true,
+        title: text,
+        classNames: ['task', ...(person ? emphasis(person.id) : [])],
+        backgroundColor: person ? `color-mix(in oklab, ${person.color} 22%, white)` : undefined,
+        borderColor: person?.color,
+        textColor: 'var(--color-base-content)',
+        extendedProps: {
+          date,
+          isTask: true,
+          order: ends ? -1 : 0.5,
+          handover: { text, time },
+          tip: ends
+            ? `Sigue la guardia del ${when} (${name}) hasta ${atTime(time)}. Tocá para cambiarla.`
+            : `La guardia del ${when} (${name}) arranca a ${atTime(time)}. Tocá para cambiarla.`,
         },
-      ]
-    })
+      }
+    }
+    const carried = [
+      ...Object.entries(extensions).map(([date, end]) => handover(date, addDaysTo(date, 1), end, true)),
+      ...Object.entries(advances).map(([date, start]) => handover(date, addDaysTo(date, -1), start, false)),
+    ]
     return [...real, ...ghosts, ...carried, ...taskRows]
-  }, [shifts, extensions, suggestions, showSuggestions, r1, tasks, taskGapsByKind, peopleById, highlightId, problems, showProblems, unavoidable])
+  }, [shifts, extensions, advances, holiday, suggestions, showSuggestions, r1, tasks, taskGapsByKind, peopleById, highlightId, problems, showProblems, unavoidable])
 
   // FullCalendar vuelve a dibujar todo si alguna de sus funciones cambia de identidad: las que dependen del estado
   // llaman a la versión más reciente por una ref, y las demás se memorizan.

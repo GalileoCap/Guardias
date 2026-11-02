@@ -10,6 +10,7 @@ const base = (): AppData => ({
   quirofano: { '2026-10-05': 'flor', '2026-10-12': 'flor', '2026-10-19': 'flor', '2026-10-26': 'ana' },
   tasks: {},
   extensions: {},
+  advances: {},
   taskDays: {},
   settings: { ...defaultSettings, quirofanoOrder: ['flor', 'ana'] },
 })
@@ -224,5 +225,31 @@ describe('extensiones de guardias', () => {
     b.extensions['2026-10-10'] = '11:00'
     delete b.extensions['2026-10-16']
     expect(diff(a, b)).toEqual({ extensions: { set: { '2026-10-10': '11:00' }, del: ['2026-10-16'] } })
+  })
+})
+
+describe('adelantos de guardias', () => {
+  it('normalize conserva los bien formados, descarta el resto y acepta datos viejos sin adelantos', () => {
+    const raw = {
+      people: [person('ana')],
+      shifts: { '2026-11-09': 'ana', '2026-11-10': 'ana' },
+      advances: { '2026-11-09': '18:00', '2026-11-10': '7:00', x: '18:00', '2026-11-11': 18 },
+    }
+    expect(normalize(raw)!.advances).toEqual({ '2026-11-09': '18:00' })
+    expect(normalize({ people: [], shifts: {} })!.advances).toEqual({})
+  })
+
+  it('un parche agrega y borra por fecha, y descarta los de días sin guardia', () => {
+    const doc: AppData = { ...emptyData(), people: [person('ana')], shifts: { '2026-11-09': 'ana', '2026-11-16': null }, advances: { '2026-11-16': '18:00' } }
+    const out = applyPatch(doc, { advances: { set: { '2026-11-09': '18:00', '2026-11-23': '18:00' }, del: ['2026-11-16'] } })
+    expect(out.advances).toEqual({ '2026-11-09': '18:00' })
+  })
+
+  it('diff solo manda los que cambiaron', () => {
+    const a: AppData = { ...base(), advances: { '2026-10-10': '18:00', '2026-10-16': '12:00' } }
+    const b = structuredClone(a)
+    b.advances['2026-10-10'] = '19:00'
+    delete b.advances['2026-10-16']
+    expect(diff(a, b)).toEqual({ advances: { set: { '2026-10-10': '19:00' }, del: ['2026-10-16'] } })
   })
 })

@@ -5,7 +5,7 @@ import { addDaysTo, isoOf, mondayOf } from '../dates'
 import { taskKey } from '../data'
 import { CATEGORIES, categoriesOf, hasIssue, rankCandidates, rotationOrder } from '../fairness'
 import { useHolidayLookup, useIgnoreGhostClick, useProblems, useQuirofano } from '../hooks'
-import { NORMAL_END, extraHours, formatHours, minutesOf, shiftSpan, timeOf } from '../hours'
+import { NORMAL_END, extraHours, formatHours, minutesOf, shiftSpan, timeOf, withAdvance } from '../hours'
 import { useStore } from '../store'
 import { TASK_KINDS, campoPlan, curvaDefault, taskGaps, weeksFromCampoStart } from '../tasks'
 import type { TaskKind } from '../types'
@@ -117,44 +117,69 @@ function TaskRow({ kind, label, date }: { kind: TaskKind; label: string; date: s
   )
 }
 
-// Hasta dónde se puede extender una guardia: de media en media hora entre las 9 y las 20 del día siguiente
-const EXTENSION_ENDS = Array.from({ length: 23 }, (_, i) => timeOf(minutesOf('09:00') + i * 30))
+// Las horas de un relevo corrido: de media en media hora entre las 9 y las 20 (del día siguiente para una extensión,
+// del anterior para un adelanto)
+const RELAY_TIMES = Array.from({ length: 23 }, (_, i) => timeOf(minutesOf('09:00') + i * 30))
 
 const weekday = (date: string) => format(parseISO(date), 'EEE', { locale: es })
+const DAY = 24 * 60
 
-/** Horario de la guardia y hasta cuándo se extiende. */
+/** Horario de la guardia, hasta cuándo se extiende y desde cuándo se adelanta. */
 function HoursRow({ date }: { date: string }) {
-  const { extensions, setExtension } = useStore()
+  const { extensions, advances, setExtension, setAdvance } = useStore()
   const holiday = useHolidayLookup()
-  const span = shiftSpan(date, extensions, holiday)
+  const relays = { extensions, advances }
+  const span = shiftSpan(date, relays, holiday)
+  const prev = addDaysTo(date, -1)
   const next = addDaysTo(date, 1)
-  const startsLate = span.start !== shiftSpan(date, {}, holiday).start
-  const end = extensions[date]
+  // `minutes` desde la medianoche de `date`: puede caer el día anterior o el siguiente
+  const at = (minutes: number) => `${weekday(addDaysTo(date, Math.floor(minutes / DAY)))} ${timeOf(((minutes % DAY) + DAY) % DAY)}`
+  const startsLate = !(date in advances) && span.start !== shiftSpan(date, { extensions: {}, advances: {} }, holiday).start
+  // Que la guardia del medio no quede vacía: la siguiente termina cuando se adelanta la otra, y la anterior arranca
+  // cuando arranca
+  const nextEnd = advances[addDaysTo(date, 2)]
+  const extensionEnds = RELAY_TIMES.filter((t) => !nextEnd || t < nextEnd)
+  const prevStart = shiftSpan(prev, withAdvance(relays, date, null), holiday).start
+  const advanceStarts = RELAY_TIMES.filter((t) => minutesOf(t) > prevStart)
   return (
     <div className="mt-3 flex flex-wrap items-center gap-x-3 gap-y-2 text-sm">
-      <span className="flex items-center gap-2">
+      <span className="flex w-full items-center gap-2">
         <Icon name="clock" />
         <span>
-          {weekday(date)} {timeOf(span.start)} a {weekday(next)} {timeOf(span.end)} · {formatHours((span.end - span.start) / 60)}
+          {at(span.start)} a {at(span.end)} · {formatHours((span.end - span.start) / 60)}
         </span>
       </span>
       <label className="flex items-center gap-2">
         <span className="text-base-content/70">Extender hasta</span>
-        <select
-          className="select select-sm w-auto"
-          value={end ?? ''}
-          onChange={(e) => setExtension(date, e.target.value || null)}
-        >
+        <select className="select select-sm w-auto" value={extensions[date] ?? ''} onChange={(e) => setExtension(date, e.target.value || null)}>
           <option value="">No ({NORMAL_END})</option>
-          {EXTENSION_ENDS.map((t) => (
+          {extensionEnds.map((t) => (
             <option key={t} value={t}>
-              {t} (+{formatHours(extraHours(date, { [date]: t }))})
+              {weekday(next)} {t} (+{formatHours(extraHours(date, { extensions: { [date]: t }, advances: {} }))})
+            </option>
+          ))}
+        </select>
+      </label>
+      <label className="flex items-center gap-2">
+        <span className="text-base-content/70">Adelantar al</span>
+        <select className="select select-sm w-auto" value={advances[date] ?? ''} onChange={(e) => setAdvance(date, e.target.value || null)}>
+          <option value="">No</option>
+          {advanceStarts.map((t) => (
+            <option key={t} value={t}>
+              {weekday(prev)} {t} (+{formatHours(extraHours(date, { extensions: {}, advances: { [date]: t } }))})
             </option>
           ))}
         </select>
       </label>
       {startsLate && (
-        <span className="w-full text-xs text-base-content/60">Arranca más tarde porque la guardia anterior se extiende.</span>
+        <span className="w-full text-xs text-base-content/60">
+          Arranca más tarde porque la guardia anterior se extiende. Adelantarla reemplaza esa extensión.
+        </span>
+      )}
+      {next in advances && (
+        <span className="w-full text-xs text-base-content/60">
+          Termina antes porque la guardia siguiente se adelanta. Extenderla reemplaza ese adelanto.
+        </span>
       )}
     </div>
   )

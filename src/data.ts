@@ -1,6 +1,6 @@
 // Lógica de datos compartida entre el cliente y el servidor (server/index.mjs la importa tal cual,
 // Node ≥ 22.18 ejecuta TypeScript borrando los tipos). Solo sintaxis "borrable": nada de enums ni imports de paquetes.
-import type { AppData, Extensions, Person, Quirofano, Settings, Shifts, TaskDays, TaskKind, Tasks } from './types'
+import type { Advances, AppData, Extensions, Person, Quirofano, Settings, Shifts, TaskDays, TaskKind, Tasks } from './types'
 
 export const defaultSettings: Settings = {
   mode: 'r1',
@@ -10,7 +10,19 @@ export const defaultSettings: Settings = {
   countFrom: null,
 }
 
-export const emptyData = (): AppData => ({ people: [], shifts: {}, quirofano: {}, tasks: {}, taskDays: {}, extensions: {}, settings: { ...defaultSettings } })
+export const emptyData = (): AppData => ({ people: [], shifts: {}, quirofano: {}, tasks: {}, taskDays: {}, extensions: {}, advances: {}, settings: { ...defaultSettings } })
+
+/** Solo los datos, sin las acciones del store. */
+export const dataOf = ({ people, shifts, quirofano, tasks, taskDays, extensions, advances, settings }: AppData): AppData => ({
+  people,
+  shifts,
+  quirofano,
+  tasks,
+  taskDays,
+  extensions,
+  advances,
+  settings,
+})
 
 /** Clave de la anotación de una tarea en un día: hay una sola por tarea y día. */
 export const taskKey = (kind: TaskKind, date: string) => `${kind}:${date}`
@@ -23,6 +35,7 @@ export type Patch = {
   tasks?: { set: Tasks; del: string[] }
   taskDays?: { set: TaskDays; del: string[] }
   extensions?: { set: Extensions; del: string[] }
+  advances?: { set: Advances; del: string[] }
   settings?: Partial<Settings>
 }
 
@@ -33,8 +46,8 @@ const obj = (v: unknown): Obj => (isObj(v) ? v : {})
 const arr = (v: unknown): unknown[] => (Array.isArray(v) ? v : [])
 const DATE = /^\d{4}-\d{2}-\d{2}$/
 const TASK_DAYS_KEY = /^(curva|campo):\d{4}-\d{2}$/
-/** Hora de fin de una extensión: después de las 8:30 y antes de la medianoche */
-const EXTENSION_END = /^(0[89]|1\d|2[0-3]):[0-5]\d$/
+/** Hora de fin de una extensión o de comienzo de un adelanto: de las 8 a la medianoche */
+const RELAY_TIME = /^(0[89]|1\d|2[0-3]):[0-5]\d$/
 const same = (a: unknown, b: unknown) => JSON.stringify(a) === JSON.stringify(b)
 
 /** Valida y limpia datos de afuera (archivo importado, request). null si no tienen la forma mínima. */
@@ -67,8 +80,10 @@ export function normalize(raw: unknown): AppData | null {
   }
   const extensions: Extensions = {}
   for (const [d, v] of Object.entries(obj(raw.extensions))) {
-    if (DATE.test(d) && typeof v === 'string' && EXTENSION_END.test(v) && v > '08:30') extensions[d] = v
+    if (DATE.test(d) && typeof v === 'string' && RELAY_TIME.test(v) && v > '08:30') extensions[d] = v
   }
+  const advances: Advances = {}
+  for (const [d, v] of Object.entries(obj(raw.advances))) if (DATE.test(d) && typeof v === 'string' && RELAY_TIME.test(v)) advances[d] = v
   const s = obj(raw.settings)
   const settings: Settings = {
     // Lo guardado antes del selector de modo tenía el interruptor del quirófano: apagado era el grupo sin quirofanismo
@@ -80,7 +95,7 @@ export function normalize(raw: unknown): AppData | null {
       .map((h) => ({ date: h.date, name: typeof h.name === 'string' ? h.name.slice(0, 80) : 'Feriado' })),
     countFrom: typeof s.countFrom === 'string' && DATE.test(s.countFrom) ? s.countFrom : null,
   }
-  return { people, shifts, quirofano, tasks, taskDays, extensions, settings }
+  return { people, shifts, quirofano, tasks, taskDays, extensions, advances, settings }
 }
 
 const sundayOf = (monday: string) => new Date(Date.parse(`${monday}T00:00:00Z`) + 6 * 86_400_000).toISOString().slice(0, 10)
@@ -104,13 +119,14 @@ export function removePersonFrom(d: AppData, id: string, today: string): AppData
     tasks,
     taskDays: d.taskDays,
     extensions: d.extensions,
+    advances: d.advances,
     settings: { ...d.settings, quirofanoOrder: d.settings.quirofanoOrder.filter((x) => x !== id) },
   }
 }
 
 /**
  * Quita referencias a personas que ya no existen (p. ej. alguien la borró mientras otra persona le asignaba una
- * guardia) y extensiones de días que ya no tienen guardia.
+ * guardia) y extensiones y adelantos de días que ya no tienen guardia.
  */
 function dropDangling(d: AppData): AppData {
   const ids = new Set(d.people.map((p) => p.id))
@@ -121,6 +137,7 @@ function dropDangling(d: AppData): AppData {
     tasks: Object.fromEntries(Object.entries(d.tasks).filter(([, t]) => ids.has(t.personId))),
     taskDays: d.taskDays,
     extensions: Object.fromEntries(Object.entries(d.extensions).filter(([date]) => date in d.shifts)),
+    advances: Object.fromEntries(Object.entries(d.advances).filter(([date]) => date in d.shifts)),
     settings: { ...d.settings, quirofanoOrder: d.settings.quirofanoOrder.filter((id) => ids.has(id)) },
   }
 }
@@ -150,7 +167,11 @@ export function applyPatch(doc: AppData, patch: Patch): AppData {
   for (const [d, v] of Object.entries(obj(patch.extensions?.set))) extensions[d] = v
   for (const d of arr(patch.extensions?.del)) delete extensions[d as string]
 
-  const merged = { people: [...people.values()], shifts, quirofano, tasks, taskDays, extensions, settings: { ...doc.settings, ...obj(patch.settings) } }
+  const advances: Advances = { ...doc.advances }
+  for (const [d, v] of Object.entries(obj(patch.advances?.set))) advances[d] = v
+  for (const d of arr(patch.advances?.del)) delete advances[d as string]
+
+  const merged = { people: [...people.values()], shifts, quirofano, tasks, taskDays, extensions, advances, settings: { ...doc.settings, ...obj(patch.settings) } }
   return dropDangling(normalize(merged) ?? doc)
 }
 
@@ -181,6 +202,8 @@ export function diff(base: AppData, cur: AppData): Patch | null {
   if (taskDays) patch.taskDays = taskDays
   const extensions = mapDiff(base.extensions, cur.extensions)
   if (extensions) patch.extensions = extensions
+  const advances = mapDiff(base.advances, cur.advances)
+  if (advances) patch.advances = advances
 
   const settings: Obj = {}
   for (const k of Object.keys(cur.settings) as (keyof Settings)[]) {

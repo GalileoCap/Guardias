@@ -1,5 +1,5 @@
 import { useRef, useState } from 'react'
-import { normalize } from '../data'
+import { dataOf, normalize } from '../data'
 import { addDaysTo, isoOf } from '../dates'
 import { GROUP } from '../group'
 import { useStore } from '../store'
@@ -378,11 +378,12 @@ function HolidaysCard() {
 }
 
 function DataCard() {
-  const { people, shifts, quirofano, tasks, taskDays, extensions, settings, importData, reset } = useStore()
+  const state = useStore()
+  const { importData, reset } = state
   const fileRef = useRef<HTMLInputElement>(null)
 
   const exportJson = () => {
-    const blob = new Blob([JSON.stringify({ people, shifts, quirofano, tasks, taskDays, extensions, settings }, null, 2)], { type: 'application/json' })
+    const blob = new Blob([JSON.stringify(dataOf(state), null, 2)], { type: 'application/json' })
     const a = document.createElement('a')
     a.href = URL.createObjectURL(blob)
     a.download = `guardias-${new Date().toISOString().slice(0, 10)}.json`
@@ -402,7 +403,7 @@ function DataCard() {
   const share = async () => {
     if (!confirm('Se crea un grupo en el servidor con los datos actuales y pasás a trabajar ahí. Cualquiera que tenga el enlace podrá editarlo. ¿Seguir?')) return
     try {
-      const url = await createGroup({ people, shifts, quirofano, tasks, taskDays, extensions, settings })
+      const url = await createGroup(dataOf(state))
       location.href = url
     } catch (e) {
       alert(`No pude crear el grupo. ${e instanceof Error ? e.message : ''}`)

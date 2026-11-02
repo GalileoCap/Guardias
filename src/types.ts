@@ -31,6 +31,15 @@ export type TaskDays = Record<string, number[]>
  */
 export type Extensions = Record<string, string>
 
+/**
+ * 'YYYY-MM-DD' de una guardia -> hora 'HH:MM' del día anterior a la que arranca, cuando se adelanta. La guardia
+ * anterior termina a esa hora. Un mismo relevo es extensión de una o adelanto de la otra, nunca las dos.
+ */
+export type Advances = Record<string, string>
+
+/** Lo que corre los relevos entre guardias */
+export type Relays = { extensions: Extensions; advances: Advances }
+
 export type Mode = 'r1' | 'r2'
 
 export type CustomHoliday = { date: string; name: string }
@@ -54,5 +63,6 @@ export type AppData = {
   tasks: Tasks
   taskDays: TaskDays
   extensions: Extensions
+  advances: Advances
   settings: Settings
 }
