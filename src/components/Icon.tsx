@@ -12,6 +12,8 @@ import {
   IconChevronLeft,
   IconChevronRight,
   IconChevronUp,
+  IconClock,
+  IconClockPlus,
   IconHeartRateMonitor,
   IconPlant2,
   IconStethoscope,
@@ -32,6 +34,8 @@ const ICONS = {
   arrowDown: IconArrowDown,
   // Lo que se anota en el calendario
   guardia: IconStethoscope,
+  clock: IconClock,
+  extension: IconClockPlus,
   quirofano: IconHeartRateMonitor,
   campo: IconPlant2,
   curva: IconChartLine,

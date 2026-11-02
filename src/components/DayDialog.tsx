@@ -5,6 +5,7 @@ import { addDaysTo, isoOf, mondayOf } from '../dates'
 import { taskKey } from '../data'
 import { CATEGORIES, categoriesOf, hasIssue, rankCandidates, rotationOrder } from '../fairness'
 import { useHolidayLookup, useIgnoreGhostClick, useProblems, useQuirofano } from '../hooks'
+import { NORMAL_END, extraHours, extraHoursByPerson, formatHours, minutesOf, shiftSpan, timeOf } from '../hours'
 import { useStore } from '../store'
 import { TASK_KINDS, campoPlan, curvaDefault, taskGaps, weeksFromCampoStart } from '../tasks'
 import type { TaskKind } from '../types'
@@ -116,11 +117,54 @@ function TaskRow({ kind, label, date }: { kind: TaskKind; label: string; date: s
   )
 }
 
+// Hasta dónde se puede extender una guardia: de media en media hora entre las 9 y las 20 del día siguiente
+const EXTENSION_ENDS = Array.from({ length: 23 }, (_, i) => timeOf(minutesOf('09:00') + i * 30))
+
+const weekday = (date: string) => format(parseISO(date), 'EEE', { locale: es })
+
+/** Horario de la guardia y hasta cuándo se extiende. */
+function HoursRow({ date }: { date: string }) {
+  const { extensions, setExtension } = useStore()
+  const holiday = useHolidayLookup()
+  const span = shiftSpan(date, extensions, holiday)
+  const next = addDaysTo(date, 1)
+  const startsLate = span.start !== shiftSpan(date, {}, holiday).start
+  const end = extensions[date]
+  return (
+    <div className="mt-3 flex flex-wrap items-center gap-x-3 gap-y-2 text-sm">
+      <span className="flex items-center gap-2">
+        <Icon name="clock" />
+        <span>
+          {weekday(date)} {timeOf(span.start)} a {weekday(next)} {timeOf(span.end)} · {formatHours((span.end - span.start) / 60)}
+        </span>
+      </span>
+      <label className="flex items-center gap-2">
+        <span className="text-base-content/70">Extender hasta</span>
+        <select
+          className="select select-sm w-auto"
+          value={end ?? ''}
+          onChange={(e) => setExtension(date, e.target.value || null)}
+        >
+          <option value="">No ({NORMAL_END})</option>
+          {EXTENSION_ENDS.map((t) => (
+            <option key={t} value={t}>
+              {t} (+{formatHours(extraHours(date, { [date]: t }))})
+            </option>
+          ))}
+        </select>
+      </label>
+      {startsLate && (
+        <span className="w-full text-xs text-base-content/60">Arranca más tarde porque la guardia anterior se extiende.</span>
+      )}
+    </div>
+  )
+}
+
 /** Fondo suave con el color de una persona. */
 const tint = (color: string) => `color-mix(in oklab, ${color} 18%, transparent)`
 
 export default function DayDialog({ date, onClose }: { date: string; onClose: () => void }) {
-  const { people, shifts, settings, setShift, removeShift } = useStore()
+  const { people, shifts, extensions, settings, setShift, removeShift } = useStore()
   const ghostGuard = useIgnoreGhostClick()
   const quirofano = useQuirofano()
   const holiday = useHolidayLookup()
@@ -141,6 +185,16 @@ export default function DayDialog({ date, onClose }: { date: string; onClose: ()
     [date, people, shifts, quirofano, settings, holiday],
   )
 
+  // Con la guardia extendida, las horas extra de cada una sin contar esta, y quién tiene menos
+  const extended = date in extensions
+  const extra = useMemo(
+    () => (extended ? extraHoursByPerson(people, shifts, extensions, settings, date) : null),
+    [extended, people, shifts, extensions, settings, date],
+  )
+  // Si todas tienen lo mismo no se marca a nadie
+  const extraValues = extra ? candidates.map((c) => extra[c.person.id]) : []
+  const fewestExtra = new Set(extraValues).size > 1 ? Math.min(...extraValues) : null
+
   const assign = (personId: string | null) => {
     setShift(date, personId)
     onClose()
@@ -155,6 +209,7 @@ export default function DayDialog({ date, onClose }: { date: string; onClose: ()
           {isWeekend && <span className="badge badge-soft">Fin de semana</span>}
           {!exists && <span className="badge badge-ghost">Sin guardia cargada</span>}
         </div>
+        {exists && <HoursRow date={date} />}
 
         {myProblems && (
           <div className="alert alert-warning alert-soft mt-3 py-2 text-sm">
@@ -197,6 +252,9 @@ export default function DayDialog({ date, onClose }: { date: string; onClose: ()
                       <span className="badge badge-warning badge-sm">{c.gaps.before === 1 ? 'guardia ayer' : 'guardia mañana'}</span>
                     )}
                     {c.newSandwich > 0 && <span className="badge badge-warning badge-sm">sanguchito</span>}
+                    {extra && fewestExtra !== null && extra[c.person.id] === fewestExtra && (
+                      <span className="badge badge-info badge-soft badge-sm">menos horas extra</span>
+                    )}
                     {c.around === 'prefer' && <span className="badge badge-info badge-soft badge-sm">cerca de su quirófano</span>}
                     {c.weekend && c.weekend.streaks > 0 && (
                       <span className="badge badge-warning badge-sm">
@@ -208,6 +266,7 @@ export default function DayDialog({ date, onClose }: { date: string; onClose: ()
                     {[
                       ...shown.map((cat) => `${cat.short} ${c.counts[cat.key]}`),
                       ...(isWeekend ? [`Libres ${c.counts.freeWeekends}`, `Seguidos ${c.counts.consecutive}`] : []),
+                      ...(extra ? [`Horas extra ${formatHours(extra[c.person.id])}`] : []),
                     ].join(' · ')}
                     {nearestLabel(c.gaps.before, c.gaps.after)}
                   </span>

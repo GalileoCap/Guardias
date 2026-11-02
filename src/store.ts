@@ -19,7 +19,10 @@ type Actions = {
   /** Crea la guardia si no existe. personId null = sin asignar */
   setShift: (date: string, personId: string | null) => void
   setShifts: (assignments: Record<string, string | null>) => void
+  /** También quita la extensión del día */
   removeShift: (date: string) => void
+  /** Hasta qué hora 'HH:MM' del día siguiente se extiende la guardia de `date`; null = termina a las 8:30 */
+  setExtension: (date: string, end: string | null) => void
   /** week = lunes de la semana. personId null = sin asignar */
   setQuirofano: (week: string, personId: string | null) => void
   /** Anota que `personId` hizo la tarea el día `date`; reemplaza a quien estuviera anotado: hay una por tarea y día. */
@@ -42,6 +45,7 @@ export const useStore = create<AppData & Actions>()(
       quirofano: {},
       tasks: {},
       taskDays: {},
+      extensions: {},
       settings: defaultSettings,
 
       addPerson: (name) =>
@@ -63,7 +67,13 @@ export const useStore = create<AppData & Actions>()(
       removeShift: (date) =>
         set((s) => {
           const { [date]: _, ...rest } = s.shifts
-          return { shifts: rest }
+          const { [date]: __, ...extensions } = s.extensions
+          return { shifts: rest, extensions }
+        }),
+      setExtension: (date, end) =>
+        set((s) => {
+          const { [date]: _, ...rest } = s.extensions
+          return { extensions: end ? { ...rest, [date]: end } : rest }
         }),
       setQuirofano: (week, personId) =>
         set((s) => {
@@ -89,8 +99,8 @@ export const useStore = create<AppData & Actions>()(
           return { taskDays: days ? { ...rest, [`${kind}:${month}`]: [...days].sort((a, b) => a - b) } : rest }
         }),
       updateSettings: (patch) => set((s) => ({ settings: { ...s.settings, ...patch } })),
-      importData: (data) => set({ people: data.people, shifts: data.shifts, quirofano: data.quirofano ?? {}, tasks: data.tasks ?? {}, taskDays: data.taskDays ?? {}, settings: { ...defaultSettings, ...data.settings } }),
-      reset: () => set({ people: [], shifts: {}, quirofano: {}, tasks: {}, taskDays: {}, settings: defaultSettings }),
+      importData: (data) => set({ people: data.people, shifts: data.shifts, quirofano: data.quirofano ?? {}, tasks: data.tasks ?? {}, taskDays: data.taskDays ?? {}, extensions: data.extensions ?? {}, settings: { ...defaultSettings, ...data.settings } }),
+      reset: () => set({ people: [], shifts: {}, quirofano: {}, tasks: {}, taskDays: {}, extensions: {}, settings: defaultSettings }),
     }),
     {
       // en un grupo compartido, esto es solo la copia local (sin conexión) de los datos del servidor
@@ -104,7 +114,7 @@ export const useStore = create<AppData & Actions>()(
         const clean = normalize({ people: [], shifts: {}, tasks: p.tasks, settings: p.settings })
         return { ...current, ...p, tasks: clean?.tasks ?? {}, settings: clean?.settings ?? current.settings }
       },
-      partialize: ({ people, shifts, quirofano, tasks, taskDays, settings }) => ({ people, shifts, quirofano, tasks, taskDays, settings }),
+      partialize: ({ people, shifts, quirofano, tasks, taskDays, extensions, settings }) => ({ people, shifts, quirofano, tasks, taskDays, extensions, settings }),
     },
   ),
 )

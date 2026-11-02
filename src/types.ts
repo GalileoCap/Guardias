@@ -25,6 +25,12 @@ export type Tasks = Record<string, Task>
  */
 export type TaskDays = Record<string, number[]>
 
+/**
+ * 'YYYY-MM-DD' de una guardia -> hora 'HH:MM' del día siguiente a la que termina, cuando se extiende más allá de las
+ * 8:30. La guardia que sigue arranca a esa hora si empezaba antes.
+ */
+export type Extensions = Record<string, string>
+
 export type Mode = 'r1' | 'r2'
 
 export type CustomHoliday = { date: string; name: string }
@@ -47,5 +53,6 @@ export type AppData = {
   quirofano: Quirofano
   tasks: Tasks
   taskDays: TaskDays
+  extensions: Extensions
   settings: Settings
 }

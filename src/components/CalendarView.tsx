@@ -10,6 +10,7 @@ import { hasIssue, rankCandidates, rotationOrder, scoreShifts } from '../fairnes
 import { TASK_KINDS, campoPlan, suggestCurva, taskGaps, weeksFromCampoStart } from '../tasks'
 import { suggestAssignments } from '../search'
 import { contrastText, useHolidayLookup, useProblems, useQuirofano } from '../hooks'
+import { extraHours, formatHours } from '../hours'
 import { useStore } from '../store'
 import type { TaskKind } from '../types'
 import ApplyDialog, { type Reshuffle } from './ApplyDialog'
@@ -33,11 +34,12 @@ const EVENT_ORDER = 'order,title'
 
 // El motivo de cada guardia que perjudica va como tooltip del evento
 const renderEvent = (arg: EventContentArg) => {
-  const { problems, soft, tip, task } = arg.event.extendedProps as {
+  const { problems, soft, tip, task, extension } = arg.event.extendedProps as {
     problems?: string[]
     soft?: boolean
     tip?: string
     task?: { kind: TaskKind; missing?: boolean; name?: string }
+    extension?: { end: string; hours: number }
   }
   if (task) {
     // En el teléfono las celdas son angostas: la palabra "Curva" o "Campo" se esconde y queda el ícono
@@ -57,10 +59,15 @@ const renderEvent = (arg: EventContentArg) => {
       </span>
     )
   }
-  const tooltip = tip ?? (problems && [...problems, ...(soft ? ['(Ninguna otra persona lo haría mejor)'] : [])].join('\n'))
+  const tooltip = [
+    tip ?? (problems && [...problems, ...(soft ? ['(Ninguna otra persona lo haría mejor)'] : [])].join('\n')),
+    extension && `Extendida hasta las ${extension.end} del día siguiente (+${formatHours(extension.hours)})`,
+  ]
+    .filter(Boolean)
+    .join('\n')
   // Aviso fuerte: ícono de advertencia pleno. Si no había mejor opción: el mismo ícono pero tenue, además del borde punteado
   return (
-    <span title={tooltip} className="block truncate">
+    <span title={tooltip || undefined} className="block truncate">
       {problems?.length ? (
         <span className={`hidden sm:inline ${soft ? 'opacity-50' : ''}`}>
           <Icon name="warning" className="mr-1 size-3 -translate-y-px" />
@@ -68,7 +75,9 @@ const renderEvent = (arg: EventContentArg) => {
       ) : (
         ''
       )}
+      {extension && <Icon name="extension" className="mr-0.5 size-3 -translate-y-px" />}
       {arg.event.title}
+      {extension && <span className="hidden sm:inline"> +{formatHours(extension.hours)}</span>}
     </span>
   )
 }
@@ -80,7 +89,7 @@ export default function CalendarView({
   highlightId: string | null
   onHighlight: (id: string | null) => void
 }) {
-  const { people, shifts, quirofano: manualQuirofano, tasks, taskDays, settings, setShift, setShifts, setTasks, removeShift } = useStore()
+  const { people, shifts, quirofano: manualQuirofano, tasks, taskDays, extensions, settings, setShift, setShifts, setTasks, removeShift } = useStore()
   const r1 = settings.mode === 'r1' // quirófano, Curva y Campo solo en R1
   const holiday = useHolidayLookup()
   const [mode, setMode] = useState<Mode>('assign')
@@ -187,6 +196,7 @@ export default function CalendarView({
   const applicableCount = Object.keys(inMonth).length + taskCount
 
   const events = useMemo<EventInput[]>(() => {
+    const extensionOf = (date: string) => (date in extensions ? { end: extensions[date], hours: extraHours(date, extensions) } : undefined)
     const emphasis = (personId: string | null | undefined) =>
       highlightId ? [personId === highlightId ? 'highlighted' : 'dimmed'] : []
 
@@ -202,7 +212,7 @@ export default function CalendarView({
           allDay: true,
           title: person ? person.name : 'Sin asignar',
           classNames: [...(person ? [] : ['unassigned']), ...emphasis(personId), ...(flagged ? [soft ? 'problem-soft' : 'problem'] : [])],
-          extendedProps: { problems: flagged, soft, order: 0 },
+          extendedProps: { problems: flagged, soft, order: 0, extension: extensionOf(date) },
           ...(person && {
             backgroundColor: person.color,
             borderColor: person.color,
@@ -221,7 +231,7 @@ export default function CalendarView({
         backgroundColor: person.color,
         borderColor: person.color,
         textColor: contrastText(person.color),
-        extendedProps: { date, order: 0, tip: `Recomendada: ${person.name}. Tocá el día para elegir a otra persona.` },
+        extendedProps: { date, order: 0, extension: extensionOf(date), tip: `Recomendada: ${person.name}. Tocá el día para elegir a otra persona.` },
       }
     })
     const done = (r1 ? Object.values(tasks) : []).flatMap((t): EventInput[] => {
@@ -284,7 +294,7 @@ export default function CalendarView({
       ...pending.map((date) => gapEvent(kind, index, date, false, suggestions[date])),
     ])
     return [...real, ...ghosts, ...done, ...gaps]
-  }, [shifts, suggestions, r1, tasks, taskGapsByKind, peopleById, highlightId, problems, showProblems, unavoidable])
+  }, [shifts, extensions, suggestions, r1, tasks, taskGapsByKind, peopleById, highlightId, problems, showProblems, unavoidable])
 
   // FullCalendar vuelve a dibujar todo si alguna de sus funciones cambia de identidad: las que dependen del estado
   // llaman a la versión más reciente por una ref, y las demás se memorizan.

@@ -1,6 +1,6 @@
 // Lógica de datos compartida entre el cliente y el servidor (server/index.mjs la importa tal cual,
 // Node ≥ 22.18 ejecuta TypeScript borrando los tipos). Solo sintaxis "borrable": nada de enums ni imports de paquetes.
-import type { AppData, Person, Quirofano, Settings, Shifts, TaskDays, TaskKind, Tasks } from './types'
+import type { AppData, Extensions, Person, Quirofano, Settings, Shifts, TaskDays, TaskKind, Tasks } from './types'
 
 export const defaultSettings: Settings = {
   mode: 'r1',
@@ -10,7 +10,7 @@ export const defaultSettings: Settings = {
   countFrom: null,
 }
 
-export const emptyData = (): AppData => ({ people: [], shifts: {}, quirofano: {}, tasks: {}, taskDays: {}, settings: { ...defaultSettings } })
+export const emptyData = (): AppData => ({ people: [], shifts: {}, quirofano: {}, tasks: {}, taskDays: {}, extensions: {}, settings: { ...defaultSettings } })
 
 /** Clave de la anotación de una tarea en un día: hay una sola por tarea y día. */
 export const taskKey = (kind: TaskKind, date: string) => `${kind}:${date}`
@@ -22,6 +22,7 @@ export type Patch = {
   quirofano?: { set: Quirofano; del: string[] }
   tasks?: { set: Tasks; del: string[] }
   taskDays?: { set: TaskDays; del: string[] }
+  extensions?: { set: Extensions; del: string[] }
   settings?: Partial<Settings>
 }
 
@@ -32,6 +33,8 @@ const obj = (v: unknown): Obj => (isObj(v) ? v : {})
 const arr = (v: unknown): unknown[] => (Array.isArray(v) ? v : [])
 const DATE = /^\d{4}-\d{2}-\d{2}$/
 const TASK_DAYS_KEY = /^(curva|campo):\d{4}-\d{2}$/
+/** Hora de fin de una extensión: después de las 8:30 y antes de la medianoche */
+const EXTENSION_END = /^(0[89]|1\d|2[0-3]):[0-5]\d$/
 const same = (a: unknown, b: unknown) => JSON.stringify(a) === JSON.stringify(b)
 
 /** Valida y limpia datos de afuera (archivo importado, request). null si no tienen la forma mínima. */
@@ -62,6 +65,10 @@ export function normalize(raw: unknown): AppData | null {
       taskDays[key] = [...new Set<number>(v)].sort((a, b) => a - b)
     }
   }
+  const extensions: Extensions = {}
+  for (const [d, v] of Object.entries(obj(raw.extensions))) {
+    if (DATE.test(d) && typeof v === 'string' && EXTENSION_END.test(v) && v > '08:30') extensions[d] = v
+  }
   const s = obj(raw.settings)
   const settings: Settings = {
     // Lo guardado antes del selector de modo tenía el interruptor del quirófano: apagado era el grupo sin quirofanismo
@@ -73,7 +80,7 @@ export function normalize(raw: unknown): AppData | null {
       .map((h) => ({ date: h.date, name: typeof h.name === 'string' ? h.name.slice(0, 80) : 'Feriado' })),
     countFrom: typeof s.countFrom === 'string' && DATE.test(s.countFrom) ? s.countFrom : null,
   }
-  return { people, shifts, quirofano, tasks, taskDays, settings }
+  return { people, shifts, quirofano, tasks, taskDays, extensions, settings }
 }
 
 const sundayOf = (monday: string) => new Date(Date.parse(`${monday}T00:00:00Z`) + 6 * 86_400_000).toISOString().slice(0, 10)
@@ -96,11 +103,15 @@ export function removePersonFrom(d: AppData, id: string, today: string): AppData
     quirofano,
     tasks,
     taskDays: d.taskDays,
+    extensions: d.extensions,
     settings: { ...d.settings, quirofanoOrder: d.settings.quirofanoOrder.filter((x) => x !== id) },
   }
 }
 
-/** Quita referencias a personas que ya no existen (p. ej. alguien la borró mientras otra persona le asignaba una guardia). */
+/**
+ * Quita referencias a personas que ya no existen (p. ej. alguien la borró mientras otra persona le asignaba una
+ * guardia) y extensiones de días que ya no tienen guardia.
+ */
 function dropDangling(d: AppData): AppData {
   const ids = new Set(d.people.map((p) => p.id))
   return {
@@ -109,6 +120,7 @@ function dropDangling(d: AppData): AppData {
     quirofano: Object.fromEntries(Object.entries(d.quirofano).filter(([, v]) => ids.has(v))),
     tasks: Object.fromEntries(Object.entries(d.tasks).filter(([, t]) => ids.has(t.personId))),
     taskDays: d.taskDays,
+    extensions: Object.fromEntries(Object.entries(d.extensions).filter(([date]) => date in d.shifts)),
     settings: { ...d.settings, quirofanoOrder: d.settings.quirofanoOrder.filter((id) => ids.has(id)) },
   }
 }
@@ -134,7 +146,11 @@ export function applyPatch(doc: AppData, patch: Patch): AppData {
   for (const [k, v] of Object.entries(obj(patch.taskDays?.set))) taskDays[k] = v
   for (const k of arr(patch.taskDays?.del)) delete taskDays[k as string]
 
-  const merged = { people: [...people.values()], shifts, quirofano, tasks, taskDays, settings: { ...doc.settings, ...obj(patch.settings) } }
+  const extensions: Extensions = { ...doc.extensions }
+  for (const [d, v] of Object.entries(obj(patch.extensions?.set))) extensions[d] = v
+  for (const d of arr(patch.extensions?.del)) delete extensions[d as string]
+
+  const merged = { people: [...people.values()], shifts, quirofano, tasks, taskDays, extensions, settings: { ...doc.settings, ...obj(patch.settings) } }
   return dropDangling(normalize(merged) ?? doc)
 }
 
@@ -163,6 +179,8 @@ export function diff(base: AppData, cur: AppData): Patch | null {
   if (tasks) patch.tasks = tasks
   const taskDays = mapDiff(base.taskDays, cur.taskDays)
   if (taskDays) patch.taskDays = taskDays
+  const extensions = mapDiff(base.extensions, cur.extensions)
+  if (extensions) patch.extensions = extensions
 
   const settings: Obj = {}
   for (const k of Object.keys(cur.settings) as (keyof Settings)[]) {

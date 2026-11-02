@@ -9,6 +9,7 @@ const base = (): AppData => ({
   shifts: { '2026-10-10': 'flor', '2026-10-16': 'flor', '2026-10-20': 'flor', '2026-10-21': 'ana', '2026-10-22': null },
   quirofano: { '2026-10-05': 'flor', '2026-10-12': 'flor', '2026-10-19': 'flor', '2026-10-26': 'ana' },
   tasks: {},
+  extensions: {},
   taskDays: {},
   settings: { ...defaultSettings, quirofanoOrder: ['flor', 'ana'] },
 })
@@ -197,5 +198,31 @@ describe('modo del grupo', () => {
   it('el modo explícito gana sobre el interruptor viejo y este no queda en los ajustes', () => {
     expect(modeOf({ mode: 'r1', quirofanoEnabled: false })).toBe('r1')
     expect(normalized({ quirofanoEnabled: false })).not.toHaveProperty('quirofanoEnabled')
+  })
+})
+
+describe('extensiones de guardias', () => {
+  it('normalize conserva las bien formadas, descarta el resto y acepta datos viejos sin extensiones', () => {
+    const raw = {
+      people: [person('ana')],
+      shifts: { '2026-11-06': 'ana', '2026-11-07': 'ana' },
+      extensions: { '2026-11-06': '12:00', '2026-11-07': '08:00', x: '12:00', '2026-11-08': '25:00', '2026-11-09': 9 },
+    }
+    expect(normalize(raw)!.extensions).toEqual({ '2026-11-06': '12:00' })
+    expect(normalize({ people: [], shifts: {} })!.extensions).toEqual({})
+  })
+
+  it('un parche agrega y borra por fecha, y descarta las de días sin guardia', () => {
+    const doc: AppData = { ...emptyData(), people: [person('ana')], shifts: { '2026-11-06': 'ana', '2026-11-13': null }, extensions: { '2026-11-13': '10:00' } }
+    const out = applyPatch(doc, { extensions: { set: { '2026-11-06': '12:00', '2026-11-20': '12:00' }, del: ['2026-11-13'] } })
+    expect(out.extensions).toEqual({ '2026-11-06': '12:00' })
+  })
+
+  it('diff solo manda las que cambiaron', () => {
+    const a: AppData = { ...base(), extensions: { '2026-10-10': '12:00', '2026-10-16': '10:00' } }
+    const b = structuredClone(a)
+    b.extensions['2026-10-10'] = '11:00'
+    delete b.extensions['2026-10-16']
+    expect(diff(a, b)).toEqual({ extensions: { set: { '2026-10-10': '11:00' }, del: ['2026-10-16'] } })
   })
 })
